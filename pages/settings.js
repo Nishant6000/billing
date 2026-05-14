@@ -32,6 +32,7 @@ export const renderSettings = async () => {
       if (value instanceof File) continue;
       await db.saveSetting(key, value);
     }
+    await window.POS?.updateShopNameLabel?.();
     toast('Settings saved');
   });
 };

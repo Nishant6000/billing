@@ -1,6 +1,6 @@
 {
-  "name": "Offline First POS",
-  "short_name": "OfflinePOS",
+  "name": "Zento POS",
+  "short_name": "Zento POS",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#f8fafc",

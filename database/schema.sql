@@ -58,6 +58,32 @@ CREATE TABLE IF NOT EXISTS payments (
   FOREIGN KEY (sale_id) REFERENCES sales(id)
 );
 
+CREATE TABLE IF NOT EXISTS purchases (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  purchase_no TEXT NOT NULL,
+  supplier_name TEXT NOT NULL,
+  supplier_gstin TEXT,
+  bill_date TEXT NOT NULL,
+  subtotal REAL NOT NULL,
+  gst_total REAL NOT NULL DEFAULT 0,
+  grand_total REAL NOT NULL,
+  note TEXT,
+  created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS purchase_items (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  purchase_id INTEGER NOT NULL,
+  item_name TEXT NOT NULL,
+  hsn TEXT,
+  quantity REAL NOT NULL DEFAULT 1,
+  taxable_value REAL NOT NULL,
+  gst_percent REAL NOT NULL DEFAULT 0,
+  gst_amount REAL NOT NULL DEFAULT 0,
+  line_total REAL NOT NULL,
+  FOREIGN KEY (purchase_id) REFERENCES purchases(id)
+);
+
 CREATE TABLE IF NOT EXISTS bill_audit (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   sale_id INTEGER,

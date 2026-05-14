@@ -12,6 +12,11 @@ const updateDbStatus = (mode) => {
     : '<i class="fa-solid fa-database"></i> SQLite ready';
 };
 
+const updateShopNameLabel = async () => {
+  const settings = await db.getSettings();
+  $('#shop-name-label').textContent = settings.shop_name || 'Zento POS Store';
+};
+
 const bindGlobalActions = () => {
   const shell = $('#app-shell');
   const collapseButton = $('#sidebar-collapse');
@@ -26,6 +31,17 @@ const bindGlobalActions = () => {
     localStorage.setItem('pos-sidebar-collapsed', String(collapsed));
     collapseButton.setAttribute('aria-label', collapsed ? 'Expand sidebar' : 'Collapse sidebar');
     collapseButton.setAttribute('title', collapsed ? 'Expand sidebar' : 'Collapse sidebar');
+  });
+  $('#page-refresh').addEventListener('click', async () => {
+    const button = $('#page-refresh');
+    button.classList.add('refreshing');
+    button.disabled = true;
+    await updateShopNameLabel();
+    await navigate(location.hash.replace('#/', '') || 'dashboard');
+    setTimeout(() => {
+      button.classList.remove('refreshing');
+      button.disabled = false;
+    }, 250);
   });
   document.addEventListener('click', (event) => {
     const action = event.target.closest('[data-action]')?.dataset.action;
@@ -49,6 +65,7 @@ try {
   bindGlobalActions();
   const mode = await db.init();
   updateDbStatus(mode);
+  await updateShopNameLabel();
   await initRouter();
   toast(mode === 'sqlite' ? 'SQLite database initialized' : 'Running with browser IndexedDB fallback', mode === 'sqlite' ? 'success' : 'warning');
 } catch (error) {
@@ -61,3 +78,5 @@ try {
     </div>
   `;
 }
+
+window.POS.updateShopNameLabel = updateShopNameLabel;

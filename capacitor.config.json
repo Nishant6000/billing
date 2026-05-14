@@ -1,6 +1,6 @@
 {
   "appId": "com.example.offlinefirstpos",
-  "appName": "Offline First POS",
+  "appName": "Zento POS",
   "webDir": ".",
   "bundledWebRuntime": false,
   "server": {

@@ -2,7 +2,7 @@ import { $, escapeHtml } from './utils.js';
 
 export const setTitle = (title) => {
   $('#page-title').textContent = title;
-  document.title = `${title} | Offline First POS`;
+  document.title = `${title} | Zento POS`;
 };
 
 export const toast = (message, variant = 'success') => {

@@ -4,24 +4,28 @@ import { setTitle } from './ui.js';
 import { renderDashboard } from '../pages/dashboard.js';
 import { renderBilling } from '../pages/billing.js';
 import { renderProducts } from '../pages/products.js';
+import { renderPurchaseEntry, renderPurchaseHistory } from '../pages/purchase.js';
 import { renderSales } from '../pages/sales.js';
 import { renderReports } from '../pages/reports.js';
 import { renderGstExport } from '../pages/gst-export.js';
 import { renderSettings } from '../pages/settings.js';
 import { renderPrinter } from '../pages/printer.js';
+import { renderBackup } from '../pages/backup.js';
 import { renderPlaceholder } from '../pages/placeholders.js';
 
 const routes = {
   dashboard: renderDashboard,
   billing: renderBilling,
   products: renderProducts,
+  purchase: renderPurchaseEntry,
+  'purchase-history': renderPurchaseHistory,
   sales: renderSales,
   reports: renderReports,
   'gst-export': renderGstExport,
   settings: renderSettings,
   printer: renderPrinter,
   barcode: () => renderPlaceholder('Barcode', 'fa-barcode', ['Scan Barcode', 'Barcode Search', 'Barcode Settings']),
-  backup: () => renderPlaceholder('Backup', 'fa-database', ['Backup Database', 'Restore Database', 'Export Data'])
+  backup: renderBackup
 };
 
 export const renderNav = () => {

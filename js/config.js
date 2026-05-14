@@ -1,12 +1,14 @@
 export const APP_CONFIG = {
   dbName: 'offline_pos_db',
-  dbVersion: 2,
+  dbVersion: 3,
   currency: '₹',
   invoicePrefix: 'INV',
   routes: [
     { id: 'dashboard', title: 'Dashboard', icon: 'fa-gauge-high' },
     { id: 'billing', title: 'Billing', icon: 'fa-cart-shopping' },
     { id: 'products', title: 'Products', icon: 'fa-boxes-stacked' },
+    { id: 'purchase', title: 'Purchase Entry', icon: 'fa-truck-ramp-box' },
+    { id: 'purchase-history', title: 'Purchase History', icon: 'fa-clipboard-list' },
     { id: 'sales', title: 'Sales', icon: 'fa-receipt' },
     { id: 'reports', title: 'Reports', icon: 'fa-chart-line' },
     { id: 'gst-export', title: 'GST Export', icon: 'fa-file-export' },
@@ -16,7 +18,7 @@ export const APP_CONFIG = {
     { id: 'backup', title: 'Backup', icon: 'fa-database' }
   ],
   defaultSettings: {
-    shop_name: 'Offline First Store',
+    shop_name: 'Zento POS Store',
     shop_address: 'Main Market Road, India',
     gstin: '29ABCDE1234F1Z5',
     phone: '+91 90000 00000',

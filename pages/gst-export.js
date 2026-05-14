@@ -25,28 +25,50 @@ export const renderGstExport = async () => {
 };
 
 const gstRows = async () => {
-  const sales = await db.getSales({ from: $('#gst-from').value, to: $('#gst-to').value });
-  return sales.map(sale => ({
-    invoice_no: sale.invoice_no,
-    date: new Date(sale.created_at).toLocaleDateString(),
-    taxable_value: Number(sale.subtotal).toFixed(2),
-    gst_collected: Number(sale.gst_total).toFixed(2),
-    invoice_total: Number(sale.grand_total).toFixed(2),
-    payment_type: sale.payment_type
-  }));
+  const sales = (await db.getSales({ from: $('#gst-from').value, to: $('#gst-to').value }))
+    .filter(sale => (sale.status || 'paid') === 'paid')
+    .map(sale => ({
+      type: 'Sale',
+      invoice_no: sale.invoice_no,
+      party: 'Customer',
+      gstin: '',
+      date: new Date(sale.created_at).toLocaleDateString(),
+      taxable_value: Number(sale.subtotal).toFixed(2),
+      output_gst: Number(sale.gst_total).toFixed(2),
+      input_gst: '0.00',
+      invoice_total: Number(sale.grand_total).toFixed(2),
+      payment_type: sale.payment_type
+    }));
+  const purchases = (await db.getPurchases({ from: $('#gst-from').value, to: $('#gst-to').value }))
+    .map(purchase => ({
+      type: 'Purchase',
+      invoice_no: purchase.purchase_no,
+      party: purchase.supplier_name,
+      gstin: purchase.supplier_gstin || '',
+      date: new Date(purchase.bill_date).toLocaleDateString(),
+      taxable_value: Number(purchase.subtotal).toFixed(2),
+      output_gst: '0.00',
+      input_gst: Number(purchase.gst_total).toFixed(2),
+      invoice_total: Number(purchase.grand_total).toFixed(2),
+      payment_type: ''
+    }));
+  return [...sales, ...purchases].sort((a, b) => new Date(a.date) - new Date(b.date));
 };
 
 const renderSummary = async () => {
   const rows = await gstRows();
   const taxable = rows.reduce((sum, row) => sum + Number(row.taxable_value), 0);
-  const gst = rows.reduce((sum, row) => sum + Number(row.gst_collected), 0);
+  const outputGst = rows.reduce((sum, row) => sum + Number(row.output_gst), 0);
+  const inputGst = rows.reduce((sum, row) => sum + Number(row.input_gst), 0);
+  const netGst = outputGst - inputGst;
   $('#gst-summary').innerHTML = `
     <div class="row g-3 mb-3">
-      <div class="col-md-4"><div class="metric-card"><p>Taxable Value</p><h3>${money(taxable)}</h3></div></div>
-      <div class="col-md-4"><div class="metric-card"><p>GST Summary</p><h3>${money(gst)}</h3></div></div>
-      <div class="col-md-4"><div class="metric-card"><p>Invoices</p><h3>${rows.length}</h3></div></div>
+      <div class="col-md-3"><div class="metric-card"><p>Taxable Value</p><h3>${money(taxable)}</h3></div></div>
+      <div class="col-md-3"><div class="metric-card"><p>Output GST</p><h3>${money(outputGst)}</h3></div></div>
+      <div class="col-md-3"><div class="metric-card"><p>Input GST</p><h3>${money(inputGst)}</h3></div></div>
+      <div class="col-md-3"><div class="metric-card"><p>Net GST</p><h3>${money(netGst)}</h3></div></div>
     </div>
-    <div class="table-responsive"><table class="table"><thead><tr><th>Invoice</th><th>Date</th><th>Taxable</th><th>GST</th><th>Total</th><th>Payment</th></tr></thead><tbody>${rows.map(row => `<tr><td>${row.invoice_no}</td><td>${row.date}</td><td>${row.taxable_value}</td><td>${row.gst_collected}</td><td>${row.invoice_total}</td><td>${row.payment_type}</td></tr>`).join('')}</tbody></table></div>
+    <div class="table-responsive"><table class="table"><thead><tr><th>Type</th><th>Invoice</th><th>Party</th><th>Date</th><th>Taxable</th><th>Output GST</th><th>Input GST</th><th>Total</th></tr></thead><tbody>${rows.map(row => `<tr><td>${row.type}</td><td>${row.invoice_no}</td><td>${row.party}<div class="text-muted small">${row.gstin}</div></td><td>${row.date}</td><td>${row.taxable_value}</td><td>${row.output_gst}</td><td>${row.input_gst}</td><td>${row.invoice_total}</td></tr>`).join('')}</tbody></table></div>
   `;
 };
 

@@ -11,7 +11,7 @@ class IndexedDBFallback {
       const request = indexedDB.open(APP_CONFIG.dbName, APP_CONFIG.dbVersion);
       request.onupgradeneeded = () => {
         const db = request.result;
-        ['categories', 'products', 'sales', 'sale_items', 'payments', 'hold_bills', 'settings', 'bill_audit'].forEach(store => {
+        ['categories', 'products', 'sales', 'sale_items', 'payments', 'hold_bills', 'settings', 'bill_audit', 'purchases', 'purchase_items'].forEach(store => {
           if (!db.objectStoreNames.contains(store)) db.createObjectStore(store, { keyPath: store === 'settings' ? 'key' : 'id', autoIncrement: store !== 'settings' });
         });
       };
@@ -47,7 +47,41 @@ class IndexedDBFallback {
       request.onerror = () => reject(request.error);
     });
   }
+
+  async clear(name) {
+    return await new Promise((resolve, reject) => {
+      const request = this.store(name, 'readwrite').clear();
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error);
+    });
+  }
 }
+
+const BACKUP_TABLES = [
+  'settings',
+  'categories',
+  'products',
+  'sales',
+  'sale_items',
+  'payments',
+  'hold_bills',
+  'bill_audit',
+  'purchases',
+  'purchase_items'
+];
+
+const RESTORE_DELETE_ORDER = [
+  'purchase_items',
+  'purchases',
+  'bill_audit',
+  'hold_bills',
+  'payments',
+  'sale_items',
+  'sales',
+  'products',
+  'categories',
+  'settings'
+];
 
 class POSDatabase {
   constructor() {
@@ -103,6 +137,33 @@ class POSDatabase {
         new_data TEXT,
         note TEXT,
         created_at TEXT NOT NULL
+      )
+    `);
+    await this.run(`
+      CREATE TABLE IF NOT EXISTS purchases (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        purchase_no TEXT NOT NULL,
+        supplier_name TEXT NOT NULL,
+        supplier_gstin TEXT,
+        bill_date TEXT NOT NULL,
+        subtotal REAL NOT NULL,
+        gst_total REAL NOT NULL DEFAULT 0,
+        grand_total REAL NOT NULL,
+        note TEXT,
+        created_at TEXT NOT NULL
+      )
+    `);
+    await this.run(`
+      CREATE TABLE IF NOT EXISTS purchase_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        purchase_id INTEGER NOT NULL,
+        item_name TEXT NOT NULL,
+        hsn TEXT,
+        quantity REAL NOT NULL DEFAULT 1,
+        taxable_value REAL NOT NULL,
+        gst_percent REAL NOT NULL DEFAULT 0,
+        gst_amount REAL NOT NULL DEFAULT 0,
+        line_total REAL NOT NULL
       )
     `);
     await this.ensureProductColumns();
@@ -243,6 +304,66 @@ class POSDatabase {
   async deleteProduct(id) {
     if (this.mode === 'sqlite') return await this.run('DELETE FROM products WHERE id=?', [id]);
     return await this.fallback.delete('products', Number(id));
+  }
+
+  async savePurchase({ purchase_no, supplier_name, supplier_gstin = '', bill_date, note = '', items }) {
+    const subtotal = items.reduce((sum, item) => sum + Number(item.taxable_value || 0), 0);
+    const gstTotal = items.reduce((sum, item) => sum + Number(item.taxable_value || 0) * (Number(item.gst_percent || 0) / 100), 0);
+    const grandTotal = subtotal + gstTotal;
+    const created = todayISO();
+
+    if (this.mode === 'sqlite') {
+      const result = await this.run(`
+        INSERT INTO purchases(purchase_no, supplier_name, supplier_gstin, bill_date, subtotal, gst_total, grand_total, note, created_at)
+        VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [purchase_no, supplier_name, supplier_gstin, bill_date, subtotal, gstTotal, grandTotal, note, created]);
+      const purchaseId = result.changes?.lastId;
+      for (const item of items) {
+        const taxable = Number(item.taxable_value || 0);
+        const gstAmount = taxable * (Number(item.gst_percent || 0) / 100);
+        await this.run(`
+          INSERT INTO purchase_items(purchase_id, item_name, hsn, quantity, taxable_value, gst_percent, gst_amount, line_total)
+          VALUES(?, ?, ?, ?, ?, ?, ?, ?)
+        `, [purchaseId, item.item_name, item.hsn || '', Number(item.quantity || 1), taxable, Number(item.gst_percent || 0), gstAmount, taxable + gstAmount]);
+      }
+      return purchaseId;
+    }
+
+    const purchaseId = await this.fallback.put('purchases', { purchase_no, supplier_name, supplier_gstin, bill_date, subtotal, gst_total: gstTotal, grand_total: grandTotal, note, created_at: created });
+    for (const item of items) {
+      const taxable = Number(item.taxable_value || 0);
+      const gstAmount = taxable * (Number(item.gst_percent || 0) / 100);
+      await this.fallback.put('purchase_items', { purchase_id: purchaseId, item_name: item.item_name, hsn: item.hsn || '', quantity: Number(item.quantity || 1), taxable_value: taxable, gst_percent: Number(item.gst_percent || 0), gst_amount: gstAmount, line_total: taxable + gstAmount });
+    }
+    return purchaseId;
+  }
+
+  async getPurchases({ from = '', to = '', search = '' } = {}) {
+    let rows = this.mode === 'sqlite'
+      ? await this.query('SELECT * FROM purchases ORDER BY bill_date DESC, created_at DESC')
+      : await this.fallback.all('purchases');
+    rows = rows.sort((a, b) => `${b.bill_date}${b.created_at}`.localeCompare(`${a.bill_date}${a.created_at}`));
+    return rows.filter(row => {
+      const day = dateOnly(row.bill_date || row.created_at);
+      const haystack = `${row.purchase_no} ${row.supplier_name} ${row.supplier_gstin}`.toLowerCase();
+      return (!from || day >= from) && (!to || day <= to) && (!search || haystack.includes(search.toLowerCase()));
+    });
+  }
+
+  async getPurchaseItems(purchaseId) {
+    const rows = this.mode === 'sqlite'
+      ? await this.query('SELECT * FROM purchase_items WHERE purchase_id=?', [purchaseId])
+      : await this.fallback.all('purchase_items');
+    return rows.filter(row => Number(row.purchase_id) === Number(purchaseId));
+  }
+
+  async deletePurchase(id) {
+    if (this.mode === 'sqlite') {
+      await this.run('DELETE FROM purchase_items WHERE purchase_id=?', [id]);
+      return await this.run('DELETE FROM purchases WHERE id=?', [id]);
+    }
+    await Promise.all((await this.getPurchaseItems(id)).map(item => this.fallback.delete('purchase_items', item.id)));
+    return await this.fallback.delete('purchases', Number(id));
   }
 
   async saveSale({ invoice_no, items, subtotal, discount, gstTotal, grandTotal, paymentType, referenceNo = '' }) {
@@ -419,6 +540,54 @@ class POSDatabase {
     const rows = await this.getSales();
     const settings = await this.getSettings();
     return invoiceNumber(rows.length, settings.bill_prefix || APP_CONFIG.invoicePrefix);
+  }
+
+  async exportBackup() {
+    const data = {};
+    for (const table of BACKUP_TABLES) {
+      data[table] = this.mode === 'sqlite'
+        ? await this.query(`SELECT * FROM ${table}`)
+        : await this.fallback.all(table);
+    }
+    return {
+      app: 'Zento POS',
+      format: 'zento-pos-json-backup',
+      version: 1,
+      dbVersion: APP_CONFIG.dbVersion,
+      exportedAt: todayISO(),
+      mode: this.mode,
+      tables: data
+    };
+  }
+
+  async restoreBackup(backup) {
+    if (!backup?.tables || typeof backup.tables !== 'object') {
+      throw new Error('Invalid backup file');
+    }
+
+    if (this.mode === 'sqlite') {
+      for (const table of RESTORE_DELETE_ORDER) await this.run(`DELETE FROM ${table}`);
+      for (const table of BACKUP_TABLES) {
+        const rows = Array.isArray(backup.tables[table]) ? backup.tables[table] : [];
+        for (const row of rows) await this.insertBackupRow(table, row);
+      }
+      await this.persistWeb();
+      return;
+    }
+
+    for (const table of RESTORE_DELETE_ORDER) await this.fallback.clear(table);
+    for (const table of BACKUP_TABLES) {
+      const rows = Array.isArray(backup.tables[table]) ? backup.tables[table] : [];
+      for (const row of rows) await this.fallback.put(table, row);
+    }
+  }
+
+  async insertBackupRow(table, row) {
+    const columns = Object.keys(row || {});
+    if (!columns.length) return;
+    const placeholders = columns.map(() => '?').join(', ');
+    const columnSql = columns.map(column => `"${column}"`).join(', ');
+    await this.run(`INSERT OR REPLACE INTO ${table} (${columnSql}) VALUES (${placeholders})`, columns.map(column => row[column]));
   }
 }
 
