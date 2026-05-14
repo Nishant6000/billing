@@ -1,0 +1,22 @@
+{
+  "name": "offline-first-pos",
+  "version": "1.0.0",
+  "description": "Offline-first POS web and Android app built with HTML, Bootstrap, Vanilla JS, Capacitor, and SQLite.",
+  "type": "module",
+  "scripts": {
+    "serve": "node dev-server.mjs",
+    "cap:init": "npx cap init OfflineFirstPOS com.example.offlinefirstpos --web-dir .",
+    "cap:add:android": "npx cap add android",
+    "cap:sync": "npx cap sync android",
+    "cap:open": "npx cap open android"
+  },
+  "dependencies": {
+    "@capacitor/android": "^7.0.0",
+    "@capacitor/core": "^7.0.0",
+    "@capacitor/cli": "^7.0.0",
+    "@capacitor-community/sqlite": "^7.0.0",
+    "jeep-sqlite": "^2.8.0",
+    "http-server": "^14.1.1"
+  },
+  "devDependencies": {}
+}

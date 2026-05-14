@@ -1,0 +1,18 @@
+{
+  "appId": "com.example.offlinefirstpos",
+  "appName": "Offline First POS",
+  "webDir": ".",
+  "bundledWebRuntime": false,
+  "server": {
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "CapacitorSQLite": {
+      "iosDatabaseLocation": "Library/CapacitorDatabase",
+      "androidIsEncryption": false,
+      "androidBiometric": {
+        "biometricAuth": false
+      }
+    }
+  }
+}
