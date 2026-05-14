@@ -11,6 +11,7 @@ import { renderGstExport } from '../pages/gst-export.js';
 import { renderSettings } from '../pages/settings.js';
 import { renderPrinter } from '../pages/printer.js';
 import { renderBackup } from '../pages/backup.js';
+import { renderBarcode } from '../pages/barcode.js';
 import { renderPlaceholder } from '../pages/placeholders.js';
 
 const routes = {
@@ -24,7 +25,7 @@ const routes = {
   'gst-export': renderGstExport,
   settings: renderSettings,
   printer: renderPrinter,
-  barcode: () => renderPlaceholder('Barcode', 'fa-barcode', ['Scan Barcode', 'Barcode Search', 'Barcode Settings']),
+  barcode: renderBarcode,
   backup: renderBackup
 };
 

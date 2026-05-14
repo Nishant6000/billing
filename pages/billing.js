@@ -86,6 +86,15 @@ const renderProducts = async (search = '') => {
   `).join('');
 };
 
+const addProductToCart = async (id) => {
+  const product = (await db.getProducts()).find(item => Number(item.id) === Number(id));
+  if (!product) return;
+  const existing = cart.find(item => Number(item.id) === Number(id));
+  if (existing) existing.quantity += 1;
+  else cart.push({ ...product, quantity: 1 });
+  renderCart();
+};
+
 export const renderBilling = async () => {
   $('#view').innerHTML = `
     <div class="row g-3">
@@ -127,11 +136,7 @@ export const renderBilling = async () => {
   $('#billing-products').addEventListener('click', async (event) => {
     const id = event.target.closest('[data-product]')?.dataset.product;
     if (!id) return;
-    const product = (await db.getProducts()).find(item => Number(item.id) === Number(id));
-    const existing = cart.find(item => Number(item.id) === Number(id));
-    if (existing) existing.quantity += 1;
-    else cart.push({ ...product, quantity: 1 });
-    renderCart();
+    await addProductToCart(id);
   });
   $('#cart-items').addEventListener('click', (event) => {
     const removeButton = event.target.closest('[data-remove]');
@@ -164,6 +169,22 @@ export const renderBilling = async () => {
   });
   $('#resume-bill').addEventListener('click', openHoldBills);
   $('#pay-now').addEventListener('click', openPayment);
+  await addPendingBarcodeToCart();
+};
+
+const addPendingBarcodeToCart = async () => {
+  const barcode = sessionStorage.getItem('pos-pending-barcode');
+  if (!barcode) return;
+  sessionStorage.removeItem('pos-pending-barcode');
+  $('#billing-search').value = barcode;
+  await renderProducts(barcode);
+  const product = (await db.getProducts(barcode)).find(item => String(item.barcode || '') === String(barcode));
+  if (product) {
+    await addProductToCart(product.id);
+    toast('Scanned product added to bill');
+  } else {
+    toast('No product found for scanned barcode', 'warning');
+  }
 };
 
 const openPayment = async () => {

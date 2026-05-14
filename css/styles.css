@@ -379,6 +379,37 @@ body {
   padding: 12px 0;
   border-bottom: 1px dashed var(--line);
 }
+.barcode-camera-frame {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-height: 320px;
+  overflow: hidden;
+  border-radius: 18px;
+  background: linear-gradient(135deg, #0f172a, #111827);
+  border: 1px solid rgba(15, 23, 42, .18);
+}
+.barcode-camera-frame video {
+  width: 100%;
+  height: 100%;
+  min-height: 320px;
+  object-fit: cover;
+}
+.barcode-scan-line {
+  position: absolute;
+  left: 12%;
+  right: 12%;
+  top: 50%;
+  height: 3px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent, #22c55e, transparent);
+  box-shadow: 0 0 18px rgba(34, 197, 94, .85);
+  animation: scanLine 1.8s ease-in-out infinite;
+}
+@keyframes scanLine {
+  0%, 100% { transform: translateY(-90px); opacity: .55; }
+  50% { transform: translateY(90px); opacity: 1; }
+}
 .empty-state {
   display: grid;
   place-items: center;
