@@ -46,9 +46,13 @@
             <h1 id="page-title" class="page-title">Dashboard</h1>
           </div>
           <div class="topbar-actions">
+            <span class="status-pill user-pill" id="user-session-label"><i class="fa-solid fa-lock"></i> Locked</span>
             <span class="status-pill" id="db-status"><i class="fa-solid fa-circle-notch fa-spin"></i> Starting DB</span>
             <button class="btn btn-refresh" id="page-refresh" type="button" title="Refresh current page">
               <i class="fa-solid fa-rotate"></i><span>Refresh</span>
+            </button>
+            <button class="btn btn-outline-secondary" id="logout-user" type="button" title="Logout">
+              <i class="fa-solid fa-right-from-bracket"></i><span>Logout</span>
             </button>
             <button class="btn btn-primary-gradient" data-action="new-bill"><i class="fa-solid fa-plus"></i> New Bill</button>
           </div>

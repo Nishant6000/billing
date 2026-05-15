@@ -1,6 +1,6 @@
 export const APP_CONFIG = {
   dbName: 'offline_pos_db',
-  dbVersion: 5,
+  dbVersion: 7,
   currency: '₹',
   invoicePrefix: 'INV',
   routes: [
@@ -19,6 +19,14 @@ export const APP_CONFIG = {
     { id: 'barcode', title: 'Barcode', icon: 'fa-barcode' },
     { id: 'backup', title: 'Backup', icon: 'fa-database' }
   ],
+  roles: ['Owner', 'Manager', 'Cashier', 'Inventory', 'Accountant'],
+  roleAccess: {
+    Owner: ['*'],
+    Manager: ['dashboard', 'billing', 'tables', 'products', 'purchase', 'purchase-history', 'sales', 'whatsapp-marketing', 'reports', 'gst-export', 'printer', 'barcode', 'backup'],
+    Cashier: ['dashboard', 'billing', 'tables', 'sales', 'barcode'],
+    Inventory: ['dashboard', 'products', 'purchase', 'purchase-history', 'barcode', 'backup'],
+    Accountant: ['dashboard', 'sales', 'purchase-history', 'reports', 'gst-export', 'backup']
+  },
   defaultSettings: {
     shop_name: 'Ginsoft POS Store',
     shop_address: 'Main Market Road, India',

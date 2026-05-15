@@ -36,6 +36,9 @@ CREATE TABLE IF NOT EXISTS sales (
   payment_type TEXT NOT NULL,
   customer_name TEXT,
   customer_phone TEXT,
+  cashier_user_id TEXT,
+  cashier_name TEXT,
+  cashier_role TEXT,
   status TEXT NOT NULL DEFAULT 'paid',
   created_at TEXT NOT NULL
 );
@@ -64,6 +67,17 @@ CREATE TABLE IF NOT EXISTS payments (
   FOREIGN KEY (sale_id) REFERENCES sales(id)
 );
 
+CREATE TABLE IF NOT EXISTS users (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id TEXT NOT NULL UNIQUE,
+  full_name TEXT NOT NULL,
+  role TEXT NOT NULL,
+  pin_hash TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'active',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS dining_tables (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   table_name TEXT NOT NULL,
@@ -80,6 +94,9 @@ CREATE TABLE IF NOT EXISTS table_orders (
   order_type TEXT NOT NULL DEFAULT 'table',
   status TEXT NOT NULL DEFAULT 'open',
   note TEXT,
+  order_user_id TEXT,
+  order_user_name TEXT,
+  order_user_role TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
@@ -147,6 +164,9 @@ CREATE TABLE IF NOT EXISTS bill_audit (
   previous_data TEXT,
   new_data TEXT,
   note TEXT,
+  activity_user_id TEXT,
+  activity_user_name TEXT,
+  activity_user_role TEXT,
   created_at TEXT NOT NULL
 );
 

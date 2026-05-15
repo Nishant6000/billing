@@ -1,6 +1,7 @@
 import { APP_CONFIG } from './config.js';
 import { $, $$ } from './utils.js';
-import { setTitle } from './ui.js';
+import { setTitle, toast } from './ui.js';
+import { canAccessRoute, getCurrentUser, visibleRoutesForUser } from './auth.js';
 import { renderDashboard } from '../pages/dashboard.js';
 import { renderBilling } from '../pages/billing.js';
 import { renderTables } from '../pages/tables.js';
@@ -34,7 +35,8 @@ const routes = {
 };
 
 export const renderNav = () => {
-  $('#nav-menu').innerHTML = APP_CONFIG.routes.map(route => `
+  const routes = visibleRoutesForUser(getCurrentUser());
+  $('#nav-menu').innerHTML = routes.map(route => `
     <a class="nav-link-pos" href="#/${route.id}" data-route="${route.id}" title="${route.title}">
       <i class="fa-solid ${route.icon}"></i><span>${route.title}</span>
     </a>
@@ -42,15 +44,32 @@ export const renderNav = () => {
 };
 
 export const navigate = async (routeId = 'dashboard') => {
+  const user = getCurrentUser();
+  if (!user) {
+    renderNav();
+    setTitle('PIN Login');
+    return;
+  }
   const route = APP_CONFIG.routes.find(item => item.id === routeId) || APP_CONFIG.routes[0];
+  if (!canAccessRoute(user, route.id)) {
+    toast('This role does not have access to that page', 'warning');
+    const firstAllowed = visibleRoutesForUser(user)[0] || APP_CONFIG.routes[0];
+    if (location.hash !== `#/${firstAllowed.id}`) location.hash = `#/${firstAllowed.id}`;
+    if (firstAllowed.id !== route.id) return await navigate(firstAllowed.id);
+  }
   setTitle(route.title);
   $$('.nav-link-pos').forEach(link => link.classList.toggle('active', link.dataset.route === route.id));
   await (routes[route.id] || routes.dashboard)();
   $('#sidebar').classList.remove('open');
 };
 
+let routerBound = false;
+
 export const initRouter = async () => {
   renderNav();
-  window.addEventListener('hashchange', () => navigate(location.hash.replace('#/', '') || 'dashboard'));
+  if (!routerBound) {
+    window.addEventListener('hashchange', () => navigate(location.hash.replace('#/', '') || 'dashboard'));
+    routerBound = true;
+  }
   await navigate(location.hash.replace('#/', '') || 'dashboard');
 };

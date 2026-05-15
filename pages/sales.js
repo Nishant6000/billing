@@ -1,4 +1,5 @@
 import { db } from '../js/db.js';
+import { getCurrentUser } from '../js/auth.js';
 import { $, dateOnly, debounce, escapeHtml, formatQuantity, money } from '../js/utils.js';
 import { closeModal, showModal, toast } from '../js/ui.js';
 
@@ -63,12 +64,12 @@ export const renderSales = async () => {
     if (button.dataset.whatsapp) return await sendSaleOnWhatsApp(sale);
     if (button.dataset.modify) return await openModifySale(sale);
     if (button.dataset.delete && confirm('Delete this bill?')) {
-      await db.deleteSale(id);
+      await db.deleteSale(id, getCurrentUser());
       toast('Bill deleted', 'warning');
       return await renderRows();
     }
     if (button.dataset.return && confirm('Mark this bill as returned?')) {
-      await db.returnSale(id);
+      await db.returnSale(id, 'Bill returned', getCurrentUser());
       toast('Bill marked returned', 'warning');
       return await renderRows();
     }
@@ -94,7 +95,7 @@ const openModifySale = async (sale) => {
   $('#modify-sale-form').addEventListener('submit', async (event) => {
     event.preventDefault();
     const form = Object.fromEntries(new FormData(event.currentTarget).entries());
-    await db.updateSale(sale.id, form);
+    await db.updateSale(sale.id, form, getCurrentUser());
     closeModal();
     toast('Bill modified');
     await renderRows();

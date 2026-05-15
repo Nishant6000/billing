@@ -37,7 +37,7 @@ export const renderReports = async () => {
       <h2 class="section-title" id="activity-title">Bill Activity</h2>
       <div class="table-responsive">
         <table class="table">
-          <thead><tr><th>Invoice</th><th>Activity</th><th>Note</th><th>Bill Amount</th><th>Date</th></tr></thead>
+          <thead><tr><th>Invoice</th><th>Activity</th><th>User</th><th>Note</th><th>Bill Amount</th><th>Date</th></tr></thead>
           <tbody id="activity-report-body"></tbody>
         </table>
       </div>
@@ -104,11 +104,12 @@ const runStatusReport = async (status) => {
     <tr>
       <td><strong>${escapeHtml(row.invoice_no)}</strong></td>
       <td><span class="badge-soft">${escapeHtml(row.activity)}</span></td>
+      <td>${userCell(row)}</td>
       <td>${escapeHtml(row.note || '-')}</td>
       <td class="fw-bold">${money(row.bill_amount)}</td>
       <td>${new Date(row.date).toLocaleString()}</td>
     </tr>
-  `).join('') : '<tr><td colspan="5" class="text-center text-muted py-4">No bills found.</td></tr>';
+  `).join('') : '<tr><td colspan="6" class="text-center text-muted py-4">No bills found.</td></tr>';
 };
 
 const runActivityReport = async (type) => {
@@ -121,11 +122,12 @@ const runActivityReport = async (type) => {
     <tr>
       <td><strong>${escapeHtml(row.invoice_no)}</strong></td>
       <td><span class="badge-soft">${escapeHtml(row.event_type)}</span></td>
+      <td>${userCell(activityUser(row))}</td>
       <td>${escapeHtml(row.note || '-')}</td>
       <td class="fw-bold">${money(activityBillAmount(row))}</td>
       <td>${new Date(row.created_at).toLocaleString()}</td>
     </tr>
-  `).join('') : '<tr><td colspan="5" class="text-center text-muted py-4">No bill activity found.</td></tr>';
+  `).join('') : '<tr><td colspan="6" class="text-center text-muted py-4">No bill activity found.</td></tr>';
 };
 
 const exportRowsForType = async (type) => {
@@ -144,11 +146,12 @@ const runUnpaidReport = async () => {
     <tr>
       <td><strong>${escapeHtml(row.invoice_no)}</strong><div class="text-muted small">${escapeHtml(row.table || '-')}</div></td>
       <td><span class="badge-soft">${escapeHtml(row.activity)}</span></td>
+      <td>${userCell(row)}</td>
       <td>${escapeHtml(row.note || '-')}</td>
       <td class="fw-bold">${money(row.bill_amount)}</td>
       <td>${new Date(row.date).toLocaleString()}</td>
     </tr>
-  `).join('') : '<tr><td colspan="5" class="text-center text-muted py-4">No saved unpaid bills found.</td></tr>';
+  `).join('') : '<tr><td colspan="6" class="text-center text-muted py-4">No saved unpaid bills found.</td></tr>';
 };
 
 const unpaidRows = async () => {
@@ -170,6 +173,9 @@ const unpaidRows = async () => {
       note: order.order_type === 'table' ? 'Table order saved, payment pending' : `${order.order_type} order saved, payment pending`,
       bill_amount: totals.grandTotal,
       date: order.updated_at || order.created_at,
+      user_name: order.order_user_name || '',
+      user_id: order.order_user_id || '',
+      user_role: order.order_user_role || '',
       table: table ? `${table.table_name} (${table.area || 'Dining'})` : order.order_type,
       item_count: items.length,
       products: items.map(item => `${item.product_name} x ${formatQuantity(item.quantity, item.sale_unit || item.base_unit || 'Piece')}`).join(' | ')
@@ -188,6 +194,9 @@ const statusRows = async (status) => {
       note: status === 'paid' ? 'Current paid bill' : 'Current returned bill',
       bill_amount: Number(sale.grand_total || 0),
       date: sale.created_at,
+      user_name: sale.cashier_name || '',
+      user_id: sale.cashier_user_id || '',
+      user_role: sale.cashier_role || '',
       payment_type: sale.payment_type,
       gst: Number(sale.gst_total || 0),
       discount: Number(sale.discount || 0)
@@ -203,6 +212,9 @@ const formatBillActivityForExport = (rows) => rows.map(row => {
   return {
     invoice_no: row.invoice_no,
     activity: row.event_type,
+    user_name: row.activity_user_name || sale.cashier_name || nextSale.cashier_name || '',
+    user_id: row.activity_user_id || sale.cashier_user_id || nextSale.cashier_user_id || '',
+    user_role: row.activity_user_role || sale.cashier_role || nextSale.cashier_role || '',
     note: row.note || '',
     activity_date: new Date(row.created_at).toLocaleString(),
     bill_date: sale.created_at ? new Date(sale.created_at).toLocaleString() : '',
@@ -236,6 +248,24 @@ const activityBillAmount = (row) => {
   const nextSale = parseAuditSnapshot(row.new_data).sale;
   const previousSale = parseAuditSnapshot(row.previous_data).sale;
   return Number(nextSale?.grand_total ?? previousSale?.grand_total ?? 0);
+};
+
+const activityUser = (row) => {
+  const nextSale = parseAuditSnapshot(row.new_data).sale || {};
+  const previousSale = parseAuditSnapshot(row.previous_data).sale || {};
+  return {
+    user_name: row.activity_user_name || previousSale.cashier_name || nextSale.cashier_name || '',
+    user_id: row.activity_user_id || previousSale.cashier_user_id || nextSale.cashier_user_id || '',
+    user_role: row.activity_user_role || previousSale.cashier_role || nextSale.cashier_role || ''
+  };
+};
+
+const userCell = (row = {}) => {
+  const name = row.user_name || row.cashier_name || row.activity_user_name || '';
+  const id = row.user_id || row.cashier_user_id || row.activity_user_id || '';
+  const role = row.user_role || row.cashier_role || row.activity_user_role || '';
+  if (!name && !id) return '<span class="text-muted">-</span>';
+  return `<strong>${escapeHtml(name || id)}</strong><div class="text-muted small">${escapeHtml([id, role].filter(Boolean).join(' | '))}</div>`;
 };
 
 const numberText = (value) => value === undefined || value === null || value === '' ? '' : Number(value).toFixed(2);

@@ -1,4 +1,5 @@
 import { db } from '../js/db.js';
+import { getCurrentUser } from '../js/auth.js';
 import { $, calculateCart, calculateCartLines, debounce, escapeHtml, formatBasePrice, formatPackingChain, formatQuantity, money, productDiscountAmount, saleUnitsForProduct } from '../js/utils.js';
 import { closeModal, showModal, toast } from '../js/ui.js';
 
@@ -376,7 +377,8 @@ const saveRestaurantOrder = async (showToast = true) => {
   await db.saveTableOrder({
     tableId: activeRestaurantContext.tableId,
     orderType: activeRestaurantContext.orderType,
-    items: cart
+    items: cart,
+    user: getCurrentUser()
   });
   if (showToast) {
     toast('Order saved');
@@ -393,7 +395,8 @@ const printKot = async () => {
   const orderId = await db.saveTableOrder({
     tableId: activeRestaurantContext.tableId,
     orderType: activeRestaurantContext.orderType,
-    items: cart
+    items: cart,
+    user: getCurrentUser()
   });
   const kot = await db.createKot({ orderId, tableId: activeRestaurantContext.tableId, items: cart });
   const lines = cart.map(item => `<tr><td>${escapeHtml(item.product_name)}</td><td>${formatQuantity(item.quantity, item.sale_unit || item.base_unit || 'Piece')}</td></tr>`).join('');
@@ -563,7 +566,7 @@ const openPayment = async (options = {}) => {
     const invoice = await db.nextInvoice();
     const customerName = $('#customer-name').value.trim();
     const customerPhone = $('#customer-phone').value.trim();
-    await db.saveSale({ invoice_no: invoice, items: cart, subtotal: totals.subtotal, discount: totals.discount, gstTotal: totals.gstTotal, grandTotal: totals.grandTotal, paymentType, referenceNo: $('#payment-ref').value, customerName, customerPhone });
+    await db.saveSale({ invoice_no: invoice, items: cart, subtotal: totals.subtotal, discount: totals.discount, gstTotal: totals.gstTotal, grandTotal: totals.grandTotal, paymentType, referenceNo: $('#payment-ref').value, customerName, customerPhone, user: getCurrentUser() });
     if (options.closeRestaurantOrder && activeRestaurantContext) {
       const order = activeRestaurantContext.orderType === 'table'
         ? await db.getActiveTableOrder(activeRestaurantContext.tableId)

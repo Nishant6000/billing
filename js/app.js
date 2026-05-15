@@ -1,7 +1,8 @@
 import { db } from './db.js';
-import { $ } from './utils.js';
-import { initRouter, navigate } from './router.js';
-import { toast } from './ui.js';
+import { $, escapeHtml } from './utils.js';
+import { clearCurrentUser, getCurrentUser, setCurrentUser } from './auth.js';
+import { initRouter, navigate, renderNav } from './router.js';
+import { setTitle, toast } from './ui.js';
 
 const hideSplash = () => {
   const splash = $('#splash-screen');
@@ -24,6 +25,81 @@ const updateShopNameLabel = async () => {
   $('#shop-name-label').textContent = settings.shop_name || 'Ginsoft POS Store';
 };
 
+const updateUserLabel = () => {
+  const user = getCurrentUser();
+  const shell = $('#app-shell');
+  const label = $('#user-session-label');
+  const logoutButton = $('#logout-user');
+  const newBillButton = $('[data-action="new-bill"]');
+  shell.classList.toggle('auth-locked', !user);
+  label.innerHTML = user
+    ? `<i class="fa-solid fa-user-shield"></i> ${escapeHtml(user.full_name)} · ${escapeHtml(user.role)}`
+    : '<i class="fa-solid fa-lock"></i> Locked';
+  logoutButton.classList.toggle('d-none', !user);
+  newBillButton.classList.toggle('d-none', !user);
+};
+
+const ensureActiveSession = async () => {
+  const sessionUser = getCurrentUser();
+  if (!sessionUser) return null;
+  const users = await db.getUsers();
+  const freshUser = users.find(user => Number(user.id) === Number(sessionUser.id) && user.status !== 'inactive');
+  if (!freshUser) {
+    clearCurrentUser();
+    return null;
+  }
+  setCurrentUser(freshUser);
+  return freshUser;
+};
+
+const renderLogin = async () => {
+  clearCurrentUser();
+  renderNav();
+  updateUserLabel();
+  const users = await db.getUsers();
+  const activeUsers = users.filter(user => user.status !== 'inactive');
+  const userOptions = activeUsers.map(user => `
+    <option value="${escapeHtml(user.user_id)}">${escapeHtml(user.full_name)} (${escapeHtml(user.user_id)})</option>
+  `).join('');
+  setTitle('PIN Login');
+  $('#view').innerHTML = `
+    <div class="login-shell">
+      <form class="login-card" id="pin-login-form">
+        <div class="login-mark"><i class="fa-solid fa-cash-register"></i></div>
+        <p class="eyebrow mb-1">Ginsoft POS</p>
+        <h2>Enter PIN</h2>
+        <p class="text-muted mb-3">Default login is User ID <strong>owner</strong> with PIN <strong>1234</strong>. Change it from Settings after login.</p>
+        <label class="form-label">User ID</label>
+        <select class="form-select form-select-lg mb-3" name="user_id" required>
+          ${userOptions || '<option value="owner">Owner (owner)</option>'}
+        </select>
+        <label class="form-label">User PIN</label>
+        <input class="form-control form-control-lg text-center pin-input" name="pin" type="password" inputmode="numeric" pattern="[0-9]{4,8}" maxlength="8" autocomplete="current-password" required autofocus>
+        <button class="btn btn-primary-gradient w-100 mt-3" type="submit"><i class="fa-solid fa-unlock-keyhole"></i> Login</button>
+      </form>
+    </div>
+  `;
+  $('#pin-login-form').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const button = event.currentTarget.querySelector('button');
+    button.disabled = true;
+    try {
+      const form = new FormData(event.currentTarget);
+      const user = await db.authenticateUser(form.get('user_id'), form.get('pin'));
+      if (!user) {
+        toast('Invalid or inactive PIN', 'danger');
+        return;
+      }
+      setCurrentUser(user);
+      updateUserLabel();
+      await initRouter();
+      toast(`Welcome ${user.full_name}`);
+    } finally {
+      button.disabled = false;
+    }
+  });
+};
+
 const bindGlobalActions = () => {
   const shell = $('#app-shell');
   const collapseButton = $('#sidebar-collapse');
@@ -44,15 +120,20 @@ const bindGlobalActions = () => {
     button.classList.add('refreshing');
     button.disabled = true;
     await updateShopNameLabel();
-    await navigate(location.hash.replace('#/', '') || 'dashboard');
+    if (getCurrentUser()) await navigate(location.hash.replace('#/', '') || 'dashboard');
+    else await renderLogin();
     setTimeout(() => {
       button.classList.remove('refreshing');
       button.disabled = false;
     }, 250);
   });
+  $('#logout-user').addEventListener('click', () => {
+    renderLogin();
+    toast('Logged out', 'warning');
+  });
   document.addEventListener('click', (event) => {
     const action = event.target.closest('[data-action]')?.dataset.action;
-    if (action === 'new-bill') location.hash = '#/billing';
+    if (action === 'new-bill' && getCurrentUser()) location.hash = '#/billing';
   });
   document.addEventListener('keydown', (event) => {
     if (event.altKey && event.key.toLowerCase() === 'n') {
@@ -74,7 +155,10 @@ try {
   const mode = await db.init();
   updateDbStatus(mode);
   await updateShopNameLabel();
-  await initRouter();
+  const user = await ensureActiveSession();
+  updateUserLabel();
+  if (user) await initRouter();
+  else await renderLogin();
   toast(mode === 'sqlite' ? 'SQLite database initialized' : 'Running with browser IndexedDB fallback', mode === 'sqlite' ? 'success' : 'warning');
 } catch (error) {
   setTimeout(hideSplash, 3000);
@@ -89,3 +173,4 @@ try {
 }
 
 window.POS.updateShopNameLabel = updateShopNameLabel;
+window.POS.updateUserLabel = updateUserLabel;

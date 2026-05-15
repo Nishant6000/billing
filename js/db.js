@@ -11,7 +11,7 @@ class IndexedDBFallback {
       const request = indexedDB.open(APP_CONFIG.dbName, APP_CONFIG.dbVersion);
       request.onupgradeneeded = () => {
         const db = request.result;
-        ['categories', 'products', 'sales', 'sale_items', 'payments', 'hold_bills', 'settings', 'bill_audit', 'purchases', 'purchase_items', 'dining_tables', 'table_orders', 'table_order_items', 'kot_tickets', 'kot_items'].forEach(store => {
+        ['categories', 'products', 'sales', 'sale_items', 'payments', 'users', 'hold_bills', 'settings', 'bill_audit', 'purchases', 'purchase_items', 'dining_tables', 'table_orders', 'table_order_items', 'kot_tickets', 'kot_items'].forEach(store => {
           if (!db.objectStoreNames.contains(store)) db.createObjectStore(store, { keyPath: store === 'settings' ? 'key' : 'id', autoIncrement: store !== 'settings' });
         });
       };
@@ -68,6 +68,7 @@ const BACKUP_TABLES = [
   'sales',
   'sale_items',
   'payments',
+  'users',
   'dining_tables',
   'table_orders',
   'table_order_items',
@@ -90,6 +91,7 @@ const RESTORE_DELETE_ORDER = [
   'bill_audit',
   'hold_bills',
   'payments',
+  'users',
   'sale_items',
   'sales',
   'products',
@@ -181,8 +183,10 @@ class POSDatabase {
       )
     `);
     await this.ensureRestaurantTables();
+    await this.ensureUsersTable();
     await this.ensureProductColumns();
     await this.ensureSalesColumns();
+    await this.ensureAuditColumns();
     await this.ensureSaleItemColumns();
     if (Capacitor.getPlatform() === 'web') await this.sqlite.saveToStore(APP_CONFIG.dbName);
   }
@@ -212,6 +216,39 @@ class POSDatabase {
     const names = columns.map(column => column.name);
     if (!names.includes('customer_name')) await this.run('ALTER TABLE sales ADD COLUMN customer_name TEXT');
     if (!names.includes('customer_phone')) await this.run('ALTER TABLE sales ADD COLUMN customer_phone TEXT');
+    if (!names.includes('cashier_user_id')) await this.run('ALTER TABLE sales ADD COLUMN cashier_user_id TEXT');
+    if (!names.includes('cashier_name')) await this.run('ALTER TABLE sales ADD COLUMN cashier_name TEXT');
+    if (!names.includes('cashier_role')) await this.run('ALTER TABLE sales ADD COLUMN cashier_role TEXT');
+  }
+
+  async ensureAuditColumns() {
+    const columns = await this.query('PRAGMA table_info(bill_audit)');
+    const names = columns.map(column => column.name);
+    if (!names.includes('activity_user_id')) await this.run('ALTER TABLE bill_audit ADD COLUMN activity_user_id TEXT');
+    if (!names.includes('activity_user_name')) await this.run('ALTER TABLE bill_audit ADD COLUMN activity_user_name TEXT');
+    if (!names.includes('activity_user_role')) await this.run('ALTER TABLE bill_audit ADD COLUMN activity_user_role TEXT');
+  }
+
+  async ensureUsersTable() {
+    await this.run(`
+      CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id TEXT,
+        full_name TEXT NOT NULL,
+        role TEXT NOT NULL,
+        pin_hash TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'active',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )
+    `);
+    const columns = await this.query('PRAGMA table_info(users)');
+    const names = columns.map(column => column.name);
+    if (!names.includes('user_id')) await this.run('ALTER TABLE users ADD COLUMN user_id TEXT');
+    const users = await this.query('SELECT id, full_name, user_id FROM users');
+    for (const user of users.filter(item => !item.user_id)) {
+      await this.run('UPDATE users SET user_id=? WHERE id=?', [this.userIdFromName(user.full_name || `user${user.id}`), user.id]);
+    }
   }
 
   async ensureRestaurantTables() {
@@ -233,10 +270,18 @@ class POSDatabase {
         order_type TEXT NOT NULL DEFAULT 'table',
         status TEXT NOT NULL DEFAULT 'open',
         note TEXT,
+        order_user_id TEXT,
+        order_user_name TEXT,
+        order_user_role TEXT,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
       )
     `);
+    const orderColumns = await this.query('PRAGMA table_info(table_orders)');
+    const orderNames = orderColumns.map(column => column.name);
+    if (!orderNames.includes('order_user_id')) await this.run('ALTER TABLE table_orders ADD COLUMN order_user_id TEXT');
+    if (!orderNames.includes('order_user_name')) await this.run('ALTER TABLE table_orders ADD COLUMN order_user_name TEXT');
+    if (!orderNames.includes('order_user_role')) await this.run('ALTER TABLE table_orders ADD COLUMN order_user_role TEXT');
     await this.run(`
       CREATE TABLE IF NOT EXISTS table_order_items (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -316,6 +361,10 @@ class POSDatabase {
     if (!settings.shop_name) {
       await Promise.all(Object.entries(APP_CONFIG.defaultSettings).map(([key, value]) => this.saveSetting(key, value)));
     }
+    const users = await this.getUsers();
+    if (!users.length) {
+      await this.saveUser({ user_id: 'owner', full_name: 'Owner', role: 'Owner', pin: '1234', status: 'active' });
+    }
     const categories = await this.getCategories();
     if (!categories.length) {
       for (const name of ['Grocery', 'Snacks', 'Beverages', 'Personal Care']) {
@@ -349,6 +398,108 @@ class POSDatabase {
   async saveSetting(key, value) {
     if (this.mode === 'sqlite') return await this.run('INSERT OR REPLACE INTO settings(key, value) VALUES(?, ?)', [key, String(value ?? '')]);
     return await this.fallback.put('settings', { key, value: String(value ?? '') });
+  }
+
+  async hashPin(pin) {
+    const value = `ginsoft-pos:${String(pin || '')}`;
+    if (globalThis.crypto?.subtle) {
+      const bytes = await globalThis.crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
+      return [...new Uint8Array(bytes)].map(byte => byte.toString(16).padStart(2, '0')).join('');
+    }
+    return `plain:${value}`;
+  }
+
+  sanitizeUser(row = {}) {
+    const { pin_hash, ...user } = row;
+    user.user_id = user.user_id || this.userIdFromName(user.full_name || `user${user.id || ''}`);
+    return user;
+  }
+
+  userIdFromName(value = '') {
+    return String(value || 'user')
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '')
+      .slice(0, 32) || 'user';
+  }
+
+  async getUsers() {
+    const rows = this.mode === 'sqlite'
+      ? await this.query('SELECT * FROM users ORDER BY role, full_name')
+      : await this.fallback.all('users');
+    return rows
+      .map(row => this.sanitizeUser(row))
+      .sort((a, b) => `${a.role}${a.full_name}`.localeCompare(`${b.role}${b.full_name}`));
+  }
+
+  async getRawUsers() {
+    return this.mode === 'sqlite'
+      ? await this.query('SELECT * FROM users ORDER BY role, full_name')
+      : (await this.fallback.all('users')).map(row => ({
+        ...row,
+        user_id: row.user_id || this.userIdFromName(row.full_name || `user${row.id || ''}`)
+      }));
+  }
+
+  async authenticateUser(userId, pin) {
+    const pinHash = await this.hashPin(pin);
+    const normalizedUserId = this.userIdFromName(userId);
+    const users = await this.getRawUsers();
+    const user = users.find(row => row.status !== 'inactive' && this.userIdFromName(row.user_id || row.full_name) === normalizedUserId && row.pin_hash === pinHash);
+    return user ? this.sanitizeUser(user) : null;
+  }
+
+  async saveUser(user) {
+    const now = todayISO();
+    const row = {
+      ...user,
+      user_id: this.userIdFromName(user.user_id || user.full_name),
+      full_name: String(user.full_name || '').trim(),
+      role: APP_CONFIG.roles.includes(user.role) ? user.role : 'Cashier',
+      status: user.status === 'inactive' ? 'inactive' : 'active',
+      updated_at: now
+    };
+    if (!row.full_name) throw new Error('User name is required');
+    if (!row.user_id) throw new Error('User ID is required');
+    if (!row.id && !row.pin) throw new Error('PIN is required');
+    if (row.pin && !/^\d{4,8}$/.test(String(row.pin))) throw new Error('PIN must be 4 to 8 digits');
+    const pinHash = row.pin ? await this.hashPin(row.pin) : '';
+    const users = await this.getRawUsers();
+    const duplicate = users.find(item => Number(item.id) !== Number(row.id || 0) && this.userIdFromName(item.user_id || item.full_name) === row.user_id);
+    if (duplicate) throw new Error('User ID already exists');
+
+    if (this.mode === 'sqlite') {
+      if (row.id) {
+        if (pinHash) {
+          return await this.run('UPDATE users SET user_id=?, full_name=?, role=?, pin_hash=?, status=?, updated_at=? WHERE id=?', [row.user_id, row.full_name, row.role, pinHash, row.status, row.updated_at, row.id]);
+        }
+        return await this.run('UPDATE users SET user_id=?, full_name=?, role=?, status=?, updated_at=? WHERE id=?', [row.user_id, row.full_name, row.role, row.status, row.updated_at, row.id]);
+      }
+      return await this.run('INSERT INTO users(user_id, full_name, role, pin_hash, status, created_at, updated_at) VALUES(?, ?, ?, ?, ?, ?, ?)', [row.user_id, row.full_name, row.role, pinHash, row.status, now, now]);
+    }
+
+    const existing = row.id ? (await this.fallback.all('users')).find(item => Number(item.id) === Number(row.id)) : null;
+    return await this.fallback.put('users', {
+      ...existing,
+      id: row.id ? Number(row.id) : undefined,
+      user_id: row.user_id,
+      full_name: row.full_name,
+      role: row.role,
+      pin_hash: pinHash || existing?.pin_hash,
+      status: row.status,
+      created_at: existing?.created_at || now,
+      updated_at: row.updated_at
+    });
+  }
+
+  async deleteUser(id) {
+    const users = await this.getRawUsers();
+    const target = users.find(user => Number(user.id) === Number(id));
+    const activeOwners = users.filter(user => user.role === 'Owner' && user.status !== 'inactive');
+    if (target?.role === 'Owner' && activeOwners.length <= 1) throw new Error('At least one active Owner must remain');
+    if (this.mode === 'sqlite') return await this.run('DELETE FROM users WHERE id=?', [id]);
+    return await this.fallback.delete('users', Number(id));
   }
 
   async getCategories() {
@@ -514,18 +665,19 @@ class POSDatabase {
       .map(row => ({ ...JSON.parse(row.item_json || '{}'), quantity: Number(row.quantity), sale_unit: row.sale_unit || 'Piece' }));
   }
 
-  async saveTableOrder({ tableId = null, orderType = 'table', items = [], note = '' }) {
+  async saveTableOrder({ tableId = null, orderType = 'table', items = [], note = '', user = null }) {
     const now = todayISO();
+    const actor = this.actorFromUser(user);
     let order = orderType === 'table' ? await this.getActiveTableOrder(tableId) : await this.getActiveTableOrder(null, orderType);
     if (this.mode === 'sqlite') {
       if (!order) {
         const result = await this.run(`
-          INSERT INTO table_orders(table_id, order_no, order_type, status, note, created_at, updated_at)
-          VALUES(?, ?, ?, 'open', ?, ?, ?)
-        `, [tableId, `ORD-${Date.now()}`, orderType, note, now, now]);
+          INSERT INTO table_orders(table_id, order_no, order_type, status, note, order_user_id, order_user_name, order_user_role, created_at, updated_at)
+          VALUES(?, ?, ?, 'open', ?, ?, ?, ?, ?, ?)
+        `, [tableId, `ORD-${Date.now()}`, orderType, note, actor.user_id, actor.full_name, actor.role, now, now]);
         order = { id: result.changes?.lastId, table_id: tableId, order_type: orderType };
       } else {
-        await this.run('UPDATE table_orders SET note=?, updated_at=? WHERE id=?', [note, now, order.id]);
+        await this.run('UPDATE table_orders SET note=?, order_user_id=?, order_user_name=?, order_user_role=?, updated_at=? WHERE id=?', [note, actor.user_id, actor.full_name, actor.role, now, order.id]);
       }
       await this.run('DELETE FROM table_order_items WHERE order_id=?', [order.id]);
       for (const item of items) {
@@ -539,10 +691,10 @@ class POSDatabase {
     }
 
     if (!order) {
-      const orderId = await this.fallback.put('table_orders', { table_id: tableId, order_no: `ORD-${Date.now()}`, order_type: orderType, status: 'open', note, created_at: now, updated_at: now });
+      const orderId = await this.fallback.put('table_orders', { table_id: tableId, order_no: `ORD-${Date.now()}`, order_type: orderType, status: 'open', note, order_user_id: actor.user_id, order_user_name: actor.full_name, order_user_role: actor.role, created_at: now, updated_at: now });
       order = { id: orderId, table_id: tableId, order_type: orderType };
     } else {
-      await this.fallback.put('table_orders', { ...order, note, updated_at: now });
+      await this.fallback.put('table_orders', { ...order, note, order_user_id: actor.user_id, order_user_name: actor.full_name, order_user_role: actor.role, updated_at: now });
       await Promise.all((await this.fallback.all('table_order_items')).filter(row => Number(row.order_id) === Number(order.id)).map(row => this.fallback.delete('table_order_items', row.id)));
     }
     for (const item of items) {
@@ -589,13 +741,22 @@ class POSDatabase {
     }
   }
 
-  async saveSale({ invoice_no, items, subtotal, discount, gstTotal, grandTotal, paymentType, referenceNo = '', customerName = '', customerPhone = '' }) {
+  actorFromUser(user = {}) {
+    return {
+      user_id: user.user_id || '',
+      full_name: user.full_name || '',
+      role: user.role || ''
+    };
+  }
+
+  async saveSale({ invoice_no, items, subtotal, discount, gstTotal, grandTotal, paymentType, referenceNo = '', customerName = '', customerPhone = '', user = null }) {
     const created = todayISO();
+    const actor = this.actorFromUser(user);
     if (this.mode === 'sqlite') {
       const saleResult = await this.run(`
-        INSERT INTO sales(invoice_no, subtotal, discount, gst_total, grand_total, payment_type, customer_name, customer_phone, status, created_at)
-        VALUES(?, ?, ?, ?, ?, ?, ?, ?, 'paid', ?)
-      `, [invoice_no, subtotal, discount, gstTotal, grandTotal, paymentType, customerName, customerPhone, created]);
+        INSERT INTO sales(invoice_no, subtotal, discount, gst_total, grand_total, payment_type, customer_name, customer_phone, cashier_user_id, cashier_name, cashier_role, status, created_at)
+        VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'paid', ?)
+      `, [invoice_no, subtotal, discount, gstTotal, grandTotal, paymentType, customerName, customerPhone, actor.user_id, actor.full_name, actor.role, created]);
       const saleId = saleResult.changes?.lastId;
       const lines = calculateCartLines(items, discount);
       for (const line of lines) {
@@ -610,7 +771,7 @@ class POSDatabase {
       return saleId;
     }
 
-    const saleId = await this.fallback.put('sales', { invoice_no, subtotal, discount, gst_total: gstTotal, grand_total: grandTotal, payment_type: paymentType, customer_name: customerName, customer_phone: customerPhone, status: 'paid', created_at: created });
+    const saleId = await this.fallback.put('sales', { invoice_no, subtotal, discount, gst_total: gstTotal, grand_total: grandTotal, payment_type: paymentType, customer_name: customerName, customer_phone: customerPhone, cashier_user_id: actor.user_id, cashier_name: actor.full_name, cashier_role: actor.role, status: 'paid', created_at: created });
     const lines = calculateCartLines(items, discount);
     for (const line of lines) {
       const item = line.item;
@@ -628,7 +789,7 @@ class POSDatabase {
     rows = rows.sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
     return rows.filter(row => {
       const day = dateOnly(row.created_at);
-      const haystack = `${row.invoice_no} ${row.customer_name || ''} ${row.customer_phone || ''}`.toLowerCase();
+      const haystack = `${row.invoice_no} ${row.customer_name || ''} ${row.customer_phone || ''} ${row.cashier_user_id || ''} ${row.cashier_name || ''}`.toLowerCase();
       return (!from || day >= from) && (!to || day <= to) && (!payment || row.payment_type === payment) && (!search || haystack.includes(search.toLowerCase()));
     });
   }
@@ -647,16 +808,17 @@ class POSDatabase {
     return { sale, items };
   }
 
-  async auditBill(eventType, snapshot, note = '', nextData = null) {
+  async auditBill(eventType, snapshot, note = '', nextData = null, user = null) {
     if (!snapshot?.sale) return;
     const created = todayISO();
     const previous = JSON.stringify(snapshot);
     const next = nextData ? JSON.stringify(nextData) : '';
+    const actor = this.actorFromUser(user);
     if (this.mode === 'sqlite') {
       return await this.run(`
-        INSERT INTO bill_audit(sale_id, invoice_no, event_type, previous_data, new_data, note, created_at)
-        VALUES(?, ?, ?, ?, ?, ?, ?)
-      `, [snapshot.sale.id, snapshot.sale.invoice_no, eventType, previous, next, note, created]);
+        INSERT INTO bill_audit(sale_id, invoice_no, event_type, previous_data, new_data, note, activity_user_id, activity_user_name, activity_user_role, created_at)
+        VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [snapshot.sale.id, snapshot.sale.invoice_no, eventType, previous, next, note, actor.user_id, actor.full_name, actor.role, created]);
     }
     return await this.fallback.put('bill_audit', {
       sale_id: snapshot.sale.id,
@@ -665,6 +827,9 @@ class POSDatabase {
       previous_data: previous,
       new_data: next,
       note,
+      activity_user_id: actor.user_id,
+      activity_user_name: actor.full_name,
+      activity_user_role: actor.role,
       created_at: created
     });
   }
@@ -680,7 +845,7 @@ class POSDatabase {
     });
   }
 
-  async updateSale(id, updates) {
+  async updateSale(id, updates, user = null) {
     const before = await this.getSaleSnapshot(id);
     if (!before) return;
     const items = before.items.map(item => ({
@@ -716,20 +881,20 @@ class POSDatabase {
       for (const payment of payments) await this.fallback.put('payments', { ...payment, payment_type: paymentType, amount: grandTotal });
     }
     const after = await this.getSaleSnapshot(id);
-    await this.auditBill('modified', before, updates.note || 'Bill modified', after);
+    await this.auditBill('modified', before, updates.note || 'Bill modified', after, user);
   }
 
-  async returnSale(id, note = 'Bill returned') {
+  async returnSale(id, note = 'Bill returned', user = null) {
     const before = await this.getSaleSnapshot(id);
     if (!before) return;
     if (this.mode === 'sqlite') await this.run("UPDATE sales SET status='returned' WHERE id=?", [id]);
     else await this.fallback.put('sales', { ...before.sale, status: 'returned' });
-    await this.auditBill('returned', before, note, await this.getSaleSnapshot(id));
+    await this.auditBill('returned', before, note, await this.getSaleSnapshot(id), user);
   }
 
-  async deleteSale(id) {
+  async deleteSale(id, user = null) {
     const before = await this.getSaleSnapshot(id);
-    await this.auditBill('deleted', before, 'Bill deleted');
+    await this.auditBill('deleted', before, 'Bill deleted', null, user);
     if (this.mode === 'sqlite') {
       await this.run('DELETE FROM sale_items WHERE sale_id=?', [id]);
       await this.run('DELETE FROM payments WHERE sale_id=?', [id]);
