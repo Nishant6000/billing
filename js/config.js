@@ -1,11 +1,12 @@
 export const APP_CONFIG = {
   dbName: 'offline_pos_db',
-  dbVersion: 3,
+  dbVersion: 5,
   currency: '₹',
   invoicePrefix: 'INV',
   routes: [
     { id: 'dashboard', title: 'Dashboard', icon: 'fa-gauge-high' },
     { id: 'billing', title: 'Billing', icon: 'fa-cart-shopping' },
+    { id: 'tables', title: 'Tables', icon: 'fa-chair' },
     { id: 'products', title: 'Products', icon: 'fa-boxes-stacked' },
     { id: 'purchase', title: 'Purchase Entry', icon: 'fa-truck-ramp-box' },
     { id: 'purchase-history', title: 'Purchase History', icon: 'fa-clipboard-list' },
@@ -25,6 +26,7 @@ export const APP_CONFIG = {
     footer_text: 'Thank you. Visit again.',
     paper_size: '80mm',
     gst_enabled: 'true',
-    bill_prefix: 'INV'
+    bill_prefix: 'INV',
+    billing_mode: 'direct'
   }
 };

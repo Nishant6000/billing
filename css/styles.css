@@ -254,7 +254,7 @@ body {
 .touch-row { min-height: 58px; }
 .product-tile {
   width: 100%;
-  min-height: 208px;
+  min-height: 190px;
   text-align: left;
   border: 1px solid var(--line);
   border-radius: 16px;
@@ -267,7 +267,7 @@ body {
   display: grid;
   place-items: center;
   width: 100%;
-  height: 112px;
+  height: 88px;
   margin-bottom: 12px;
   overflow: hidden;
   border-radius: 14px;
@@ -315,6 +315,74 @@ body {
   color: #334155;
 }
 .billing-display-option input { accent-color: var(--primary); }
+.packing-panel {
+  padding: 14px;
+  border: 1px solid rgba(37, 99, 235, .18);
+  border-radius: 16px;
+  background: linear-gradient(135deg, #f8fafc, #eff6ff);
+}
+.restaurant-table-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 14px;
+}
+.table-card {
+  display: grid;
+  gap: 8px;
+  min-height: 150px;
+  text-align: left;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 14px 30px rgba(15, 23, 42, .07);
+  transition: transform .16s ease, border-color .16s ease, box-shadow .16s ease;
+}
+.table-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(37, 99, 235, .35);
+  box-shadow: var(--shadow);
+}
+.table-card.occupied,
+.table-card.bill-pending {
+  background: linear-gradient(135deg, #fff7ed, #ffffff);
+  border-color: rgba(245, 158, 11, .35);
+}
+.table-card.reserved {
+  background: linear-gradient(135deg, #eff6ff, #ffffff);
+  border-color: rgba(37, 99, 235, .28);
+}
+.table-card-icon {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+  color: #fff;
+  background: linear-gradient(135deg, #16a34a, #2563eb);
+}
+.table-card small { color: var(--muted); }
+.table-status {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  padding: 7px 10px;
+  border-radius: 999px;
+  color: #166534;
+  background: #dcfce7;
+  font-size: .78rem;
+  font-weight: 900;
+  text-transform: capitalize;
+}
+.table-status.occupied,
+.table-status.bill-pending {
+  color: #7c2d12;
+  background: #ffedd5;
+}
+.table-status.reserved {
+  color: #1d4ed8;
+  background: #dbeafe;
+}
 .product-upload-preview {
   display: grid;
   place-items: center;
@@ -344,18 +412,47 @@ body {
 .cart-panel { position: sticky; top: 104px; }
 .cart-line {
   display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) 48px;
+  gap: 8px;
   padding: 12px 0;
   border-bottom: 1px dashed var(--line);
 }
+.cart-line > div:first-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
 .qty-stepper { display: inline-flex; align-items: center; gap: 7px; }
 .qty-stepper button { width: 36px; height: 36px; border-radius: 10px; border: 0; background: #e0f2fe; color: #075985; }
+.cart-quantity-editor {
+  display: grid;
+  grid-template-columns: 34px minmax(64px, 1fr) minmax(74px, 1fr) 34px;
+  gap: 7px;
+  align-items: center;
+  width: 100%;
+  max-width: 260px;
+}
+.cart-quantity-editor button {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 10px;
+  color: #075985;
+  background: #e0f2fe;
+}
+.cart-quantity-editor .form-control,
+.cart-quantity-editor .form-select {
+  min-height: 34px;
+  padding: 6px 8px;
+  border-radius: 10px;
+}
 .cart-delete-btn {
   display: inline-grid;
   place-items: center;
   width: 34px;
   height: 34px;
+  margin-left: auto;
   border: 0;
   border-radius: 10px;
   color: #b91c1c;

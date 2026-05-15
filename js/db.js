@@ -1,5 +1,5 @@
 import { APP_CONFIG } from './config.js';
-import { calculateCartLines, dateOnly, invoiceNumber, todayISO } from './utils.js';
+import { calculateCartLines, dateOnly, invoiceNumber, stockQuantityUsed, todayISO } from './utils.js';
 
 class IndexedDBFallback {
   constructor() {
@@ -11,7 +11,7 @@ class IndexedDBFallback {
       const request = indexedDB.open(APP_CONFIG.dbName, APP_CONFIG.dbVersion);
       request.onupgradeneeded = () => {
         const db = request.result;
-        ['categories', 'products', 'sales', 'sale_items', 'payments', 'hold_bills', 'settings', 'bill_audit', 'purchases', 'purchase_items'].forEach(store => {
+        ['categories', 'products', 'sales', 'sale_items', 'payments', 'hold_bills', 'settings', 'bill_audit', 'purchases', 'purchase_items', 'dining_tables', 'table_orders', 'table_order_items', 'kot_tickets', 'kot_items'].forEach(store => {
           if (!db.objectStoreNames.contains(store)) db.createObjectStore(store, { keyPath: store === 'settings' ? 'key' : 'id', autoIncrement: store !== 'settings' });
         });
       };
@@ -34,7 +34,11 @@ class IndexedDBFallback {
 
   async put(name, row) {
     return await new Promise((resolve, reject) => {
-      const request = this.store(name, 'readwrite').put(row);
+      const cleanRow = { ...row };
+      if (name !== 'settings' && (cleanRow.id === undefined || cleanRow.id === null || cleanRow.id === '')) {
+        delete cleanRow.id;
+      }
+      const request = this.store(name, 'readwrite').put(cleanRow);
       request.onsuccess = () => resolve(request.result);
       request.onerror = () => reject(request.error);
     });
@@ -64,6 +68,11 @@ const BACKUP_TABLES = [
   'sales',
   'sale_items',
   'payments',
+  'dining_tables',
+  'table_orders',
+  'table_order_items',
+  'kot_tickets',
+  'kot_items',
   'hold_bills',
   'bill_audit',
   'purchases',
@@ -73,6 +82,11 @@ const BACKUP_TABLES = [
 const RESTORE_DELETE_ORDER = [
   'purchase_items',
   'purchases',
+  'kot_items',
+  'kot_tickets',
+  'table_order_items',
+  'table_orders',
+  'dining_tables',
   'bill_audit',
   'hold_bills',
   'payments',
@@ -166,7 +180,10 @@ class POSDatabase {
         line_total REAL NOT NULL
       )
     `);
+    await this.ensureRestaurantTables();
     await this.ensureProductColumns();
+    await this.ensureSalesColumns();
+    await this.ensureSaleItemColumns();
     if (Capacitor.getPlatform() === 'web') await this.sqlite.saveToStore(APP_CONFIG.dbName);
   }
 
@@ -179,6 +196,79 @@ class POSDatabase {
     if (!names.includes('billing_display')) await this.run("ALTER TABLE products ADD COLUMN billing_display TEXT NOT NULL DEFAULT 'stock'");
     if (!names.includes('product_discount_type')) await this.run("ALTER TABLE products ADD COLUMN product_discount_type TEXT NOT NULL DEFAULT 'none'");
     if (!names.includes('product_discount_value')) await this.run('ALTER TABLE products ADD COLUMN product_discount_value REAL NOT NULL DEFAULT 0');
+    if (!names.includes('base_quantity')) await this.run('ALTER TABLE products ADD COLUMN base_quantity REAL NOT NULL DEFAULT 1');
+    if (!names.includes('base_unit')) await this.run("ALTER TABLE products ADD COLUMN base_unit TEXT NOT NULL DEFAULT 'Piece'");
+    if (!names.includes('package_units_json')) await this.run('ALTER TABLE products ADD COLUMN package_units_json TEXT');
+  }
+
+  async ensureSaleItemColumns() {
+    const columns = await this.query('PRAGMA table_info(sale_items)');
+    const names = columns.map(column => column.name);
+    if (!names.includes('sale_unit')) await this.run("ALTER TABLE sale_items ADD COLUMN sale_unit TEXT NOT NULL DEFAULT 'Piece'");
+  }
+
+  async ensureSalesColumns() {
+    const columns = await this.query('PRAGMA table_info(sales)');
+    const names = columns.map(column => column.name);
+    if (!names.includes('customer_name')) await this.run('ALTER TABLE sales ADD COLUMN customer_name TEXT');
+    if (!names.includes('customer_phone')) await this.run('ALTER TABLE sales ADD COLUMN customer_phone TEXT');
+  }
+
+  async ensureRestaurantTables() {
+    await this.run(`
+      CREATE TABLE IF NOT EXISTS dining_tables (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        table_name TEXT NOT NULL,
+        area TEXT,
+        seats INTEGER NOT NULL DEFAULT 4,
+        status TEXT NOT NULL DEFAULT 'available',
+        created_at TEXT NOT NULL
+      )
+    `);
+    await this.run(`
+      CREATE TABLE IF NOT EXISTS table_orders (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        table_id INTEGER,
+        order_no TEXT NOT NULL,
+        order_type TEXT NOT NULL DEFAULT 'table',
+        status TEXT NOT NULL DEFAULT 'open',
+        note TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )
+    `);
+    await this.run(`
+      CREATE TABLE IF NOT EXISTS table_order_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        order_id INTEGER NOT NULL,
+        product_id INTEGER,
+        product_name TEXT NOT NULL,
+        quantity REAL NOT NULL,
+        sale_unit TEXT NOT NULL DEFAULT 'Piece',
+        item_json TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      )
+    `);
+    await this.run(`
+      CREATE TABLE IF NOT EXISTS kot_tickets (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        order_id INTEGER NOT NULL,
+        table_id INTEGER,
+        kot_no TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'printed',
+        created_at TEXT NOT NULL
+      )
+    `);
+    await this.run(`
+      CREATE TABLE IF NOT EXISTS kot_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        kot_id INTEGER NOT NULL,
+        product_id INTEGER,
+        product_name TEXT NOT NULL,
+        quantity REAL NOT NULL,
+        sale_unit TEXT NOT NULL DEFAULT 'Piece'
+      )
+    `);
   }
 
   async defineJeepSqlite() {
@@ -234,10 +324,16 @@ class POSDatabase {
     }
     const products = await this.getProducts();
     if (!products.length) {
-      await this.saveProduct({ category_id: 1, product_name: 'Premium Rice 1kg', barcode: '890100000001', selling_price: 78, product_discount_type: 'none', product_discount_value: 0, gst_percent: 5, stock: 120, shelf_no: 'A1', box_no: 'B01', description: 'Long grain daily rice pack', billing_display: 'stock', image: '' });
-      await this.saveProduct({ category_id: 2, product_name: 'Masala Chips', barcode: '890100000002', selling_price: 20, product_discount_type: 'percent', product_discount_value: 5, gst_percent: 12, stock: 200, shelf_no: 'A2', box_no: 'B02', description: 'Spicy snack pouch', billing_display: 'shelf_no', image: '' });
-      await this.saveProduct({ category_id: 3, product_name: 'Cold Coffee', barcode: '890100000003', selling_price: 55, product_discount_type: 'amount', product_discount_value: 5, gst_percent: 18, stock: 75, shelf_no: 'C1', box_no: 'CH1', description: 'Ready to drink coffee', billing_display: 'box_no', image: '' });
-      await this.saveProduct({ category_id: 4, product_name: 'Herbal Soap', barcode: '890100000004', selling_price: 42, product_discount_type: 'none', product_discount_value: 0, gst_percent: 18, stock: 90, shelf_no: 'D3', box_no: 'BX4', description: 'Gentle herbal bath soap', billing_display: 'description', image: '' });
+      await this.saveProduct({ category_id: 1, product_name: 'Premium Rice 1kg', barcode: '890100000001', selling_price: 78, base_quantity: 1, base_unit: 'KG', product_discount_type: 'none', product_discount_value: 0, gst_percent: 5, stock: 120, shelf_no: 'A1', box_no: 'B01', description: 'Long grain daily rice pack', billing_display: 'stock', image: '' });
+      await this.saveProduct({ category_id: 2, product_name: 'Masala Chips', barcode: '890100000002', selling_price: 20, base_quantity: 1, base_unit: 'Packet', product_discount_type: 'percent', product_discount_value: 5, gst_percent: 12, stock: 200, shelf_no: 'A2', box_no: 'B02', description: 'Spicy snack pouch', billing_display: 'shelf_no', image: '' });
+      await this.saveProduct({ category_id: 3, product_name: 'Cold Coffee', barcode: '890100000003', selling_price: 55, base_quantity: 250, base_unit: 'ML', product_discount_type: 'amount', product_discount_value: 5, gst_percent: 18, stock: 75, shelf_no: 'C1', box_no: 'CH1', description: 'Ready to drink coffee', billing_display: 'box_no', image: '' });
+      await this.saveProduct({ category_id: 4, product_name: 'Herbal Soap', barcode: '890100000004', selling_price: 42, base_quantity: 1, base_unit: 'Piece', product_discount_type: 'none', product_discount_value: 0, gst_percent: 18, stock: 90, shelf_no: 'D3', box_no: 'BX4', description: 'Gentle herbal bath soap', billing_display: 'description', image: '' });
+    }
+    const tables = await this.getDiningTables();
+    if (!tables.length) {
+      for (let index = 1; index <= 6; index += 1) {
+        await this.saveDiningTable({ table_name: `Table ${index}`, area: index <= 3 ? 'Ground Floor' : 'Family', seats: 4 });
+      }
     }
   }
 
@@ -290,13 +386,13 @@ class POSDatabase {
     if (this.mode === 'sqlite') {
       if (row.id) {
         return await this.run(`
-          UPDATE products SET category_id=?, product_name=?, barcode=?, selling_price=?, product_discount_type=?, product_discount_value=?, gst_percent=?, stock=?, shelf_no=?, box_no=?, description=?, billing_display=?, image=? WHERE id=?
-        `, [row.category_id, row.product_name, row.barcode, row.selling_price, row.product_discount_type || 'none', row.product_discount_value || 0, row.gst_percent, row.stock, row.shelf_no || '', row.box_no || '', row.description || '', row.billing_display || 'stock', row.image, row.id]);
+          UPDATE products SET category_id=?, product_name=?, barcode=?, selling_price=?, base_quantity=?, base_unit=?, package_units_json=?, product_discount_type=?, product_discount_value=?, gst_percent=?, stock=?, shelf_no=?, box_no=?, description=?, billing_display=?, image=? WHERE id=?
+        `, [row.category_id, row.product_name, row.barcode, row.selling_price, row.base_quantity || 1, row.base_unit || 'Piece', row.package_units_json || '', row.product_discount_type || 'none', row.product_discount_value || 0, row.gst_percent, row.stock, row.shelf_no || '', row.box_no || '', row.description || '', row.billing_display || 'stock', row.image, row.id]);
       }
       return await this.run(`
-        INSERT INTO products(category_id, product_name, barcode, selling_price, product_discount_type, product_discount_value, gst_percent, stock, shelf_no, box_no, description, billing_display, image, created_at)
-        VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `, [row.category_id, row.product_name, row.barcode, row.selling_price, row.product_discount_type || 'none', row.product_discount_value || 0, row.gst_percent, row.stock, row.shelf_no || '', row.box_no || '', row.description || '', row.billing_display || 'stock', row.image, row.created_at]);
+        INSERT INTO products(category_id, product_name, barcode, selling_price, base_quantity, base_unit, package_units_json, product_discount_type, product_discount_value, gst_percent, stock, shelf_no, box_no, description, billing_display, image, created_at)
+        VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [row.category_id, row.product_name, row.barcode, row.selling_price, row.base_quantity || 1, row.base_unit || 'Piece', row.package_units_json || '', row.product_discount_type || 'none', row.product_discount_value || 0, row.gst_percent, row.stock, row.shelf_no || '', row.box_no || '', row.description || '', row.billing_display || 'stock', row.image, row.created_at]);
     }
     return await this.fallback.put('products', row);
   }
@@ -366,33 +462,160 @@ class POSDatabase {
     return await this.fallback.delete('purchases', Number(id));
   }
 
-  async saveSale({ invoice_no, items, subtotal, discount, gstTotal, grandTotal, paymentType, referenceNo = '' }) {
+  async getDiningTables() {
+    const rows = this.mode === 'sqlite'
+      ? await this.query('SELECT * FROM dining_tables ORDER BY area, table_name')
+      : await this.fallback.all('dining_tables');
+    const orders = await this.getOpenTableOrders();
+    return rows
+      .map(table => ({
+        ...table,
+        status: orders.some(order => Number(order.table_id) === Number(table.id)) ? 'occupied' : (table.status || 'available')
+      }))
+      .sort((a, b) => `${a.area || ''}${a.table_name}`.localeCompare(`${b.area || ''}${b.table_name}`));
+  }
+
+  async saveDiningTable(table) {
+    const row = { ...table, created_at: table.created_at || todayISO(), status: table.status || 'available' };
+    if (this.mode === 'sqlite') {
+      if (row.id) return await this.run('UPDATE dining_tables SET table_name=?, area=?, seats=?, status=? WHERE id=?', [row.table_name, row.area || '', Number(row.seats || 4), row.status, row.id]);
+      return await this.run('INSERT INTO dining_tables(table_name, area, seats, status, created_at) VALUES(?, ?, ?, ?, ?)', [row.table_name, row.area || '', Number(row.seats || 4), row.status, row.created_at]);
+    }
+    return await this.fallback.put('dining_tables', row);
+  }
+
+  async deleteDiningTable(id) {
+    const active = await this.getActiveTableOrder(id);
+    if (active) throw new Error('Close the active order before deleting this table');
+    if (this.mode === 'sqlite') return await this.run('DELETE FROM dining_tables WHERE id=?', [id]);
+    return await this.fallback.delete('dining_tables', Number(id));
+  }
+
+  async getOpenTableOrders() {
+    const rows = this.mode === 'sqlite'
+      ? await this.query("SELECT * FROM table_orders WHERE status='open' ORDER BY updated_at DESC")
+      : await this.fallback.all('table_orders');
+    return rows.filter(row => row.status === 'open');
+  }
+
+  async getActiveTableOrder(tableId, orderType = 'table') {
+    const rows = await this.getOpenTableOrders();
+    return rows.find(row => orderType === 'table'
+      ? Number(row.table_id) === Number(tableId)
+      : row.order_type === orderType && !row.table_id) || null;
+  }
+
+  async getTableOrderItems(orderId) {
+    const rows = this.mode === 'sqlite'
+      ? await this.query('SELECT * FROM table_order_items WHERE order_id=?', [orderId])
+      : await this.fallback.all('table_order_items');
+    return rows
+      .filter(row => Number(row.order_id) === Number(orderId))
+      .map(row => ({ ...JSON.parse(row.item_json || '{}'), quantity: Number(row.quantity), sale_unit: row.sale_unit || 'Piece' }));
+  }
+
+  async saveTableOrder({ tableId = null, orderType = 'table', items = [], note = '' }) {
+    const now = todayISO();
+    let order = orderType === 'table' ? await this.getActiveTableOrder(tableId) : await this.getActiveTableOrder(null, orderType);
+    if (this.mode === 'sqlite') {
+      if (!order) {
+        const result = await this.run(`
+          INSERT INTO table_orders(table_id, order_no, order_type, status, note, created_at, updated_at)
+          VALUES(?, ?, ?, 'open', ?, ?, ?)
+        `, [tableId, `ORD-${Date.now()}`, orderType, note, now, now]);
+        order = { id: result.changes?.lastId, table_id: tableId, order_type: orderType };
+      } else {
+        await this.run('UPDATE table_orders SET note=?, updated_at=? WHERE id=?', [note, now, order.id]);
+      }
+      await this.run('DELETE FROM table_order_items WHERE order_id=?', [order.id]);
+      for (const item of items) {
+        await this.run(`
+          INSERT INTO table_order_items(order_id, product_id, product_name, quantity, sale_unit, item_json, created_at)
+          VALUES(?, ?, ?, ?, ?, ?, ?)
+        `, [order.id, item.id, item.product_name, Number(item.quantity || 0), item.sale_unit || item.base_unit || 'Piece', JSON.stringify(item), now]);
+      }
+      if (tableId) await this.run("UPDATE dining_tables SET status='occupied' WHERE id=?", [tableId]);
+      return order.id;
+    }
+
+    if (!order) {
+      const orderId = await this.fallback.put('table_orders', { table_id: tableId, order_no: `ORD-${Date.now()}`, order_type: orderType, status: 'open', note, created_at: now, updated_at: now });
+      order = { id: orderId, table_id: tableId, order_type: orderType };
+    } else {
+      await this.fallback.put('table_orders', { ...order, note, updated_at: now });
+      await Promise.all((await this.fallback.all('table_order_items')).filter(row => Number(row.order_id) === Number(order.id)).map(row => this.fallback.delete('table_order_items', row.id)));
+    }
+    for (const item of items) {
+      await this.fallback.put('table_order_items', { order_id: order.id, product_id: item.id, product_name: item.product_name, quantity: Number(item.quantity || 0), sale_unit: item.sale_unit || item.base_unit || 'Piece', item_json: JSON.stringify(item), created_at: now });
+    }
+    if (tableId) {
+      const table = (await this.fallback.all('dining_tables')).find(row => Number(row.id) === Number(tableId));
+      if (table) await this.fallback.put('dining_tables', { ...table, status: 'occupied' });
+    }
+    return order.id;
+  }
+
+  async createKot({ orderId, tableId = null, items = [] }) {
+    const kotNo = `KOT-${Date.now()}`;
+    const created = todayISO();
+    if (this.mode === 'sqlite') {
+      const result = await this.run('INSERT INTO kot_tickets(order_id, table_id, kot_no, status, created_at) VALUES(?, ?, ?, ?, ?)', [orderId, tableId, kotNo, 'printed', created]);
+      const kotId = result.changes?.lastId;
+      for (const item of items) {
+        await this.run('INSERT INTO kot_items(kot_id, product_id, product_name, quantity, sale_unit) VALUES(?, ?, ?, ?, ?)', [kotId, item.id, item.product_name, Number(item.quantity || 0), item.sale_unit || item.base_unit || 'Piece']);
+      }
+      return { kotId, kotNo };
+    }
+    const kotId = await this.fallback.put('kot_tickets', { order_id: orderId, table_id: tableId, kot_no: kotNo, status: 'printed', created_at: created });
+    for (const item of items) {
+      await this.fallback.put('kot_items', { kot_id: kotId, product_id: item.id, product_name: item.product_name, quantity: Number(item.quantity || 0), sale_unit: item.sale_unit || item.base_unit || 'Piece' });
+    }
+    return { kotId, kotNo };
+  }
+
+  async closeTableOrder(orderId) {
+    const orders = await this.getOpenTableOrders();
+    const order = orders.find(row => Number(row.id) === Number(orderId));
+    if (!order) return;
+    if (this.mode === 'sqlite') {
+      await this.run("UPDATE table_orders SET status='closed', updated_at=? WHERE id=?", [todayISO(), orderId]);
+      if (order.table_id) await this.run("UPDATE dining_tables SET status='available' WHERE id=?", [order.table_id]);
+      return;
+    }
+    await this.fallback.put('table_orders', { ...order, status: 'closed', updated_at: todayISO() });
+    if (order.table_id) {
+      const table = (await this.fallback.all('dining_tables')).find(row => Number(row.id) === Number(order.table_id));
+      if (table) await this.fallback.put('dining_tables', { ...table, status: 'available' });
+    }
+  }
+
+  async saveSale({ invoice_no, items, subtotal, discount, gstTotal, grandTotal, paymentType, referenceNo = '', customerName = '', customerPhone = '' }) {
     const created = todayISO();
     if (this.mode === 'sqlite') {
       const saleResult = await this.run(`
-        INSERT INTO sales(invoice_no, subtotal, discount, gst_total, grand_total, payment_type, status, created_at)
-        VALUES(?, ?, ?, ?, ?, ?, 'paid', ?)
-      `, [invoice_no, subtotal, discount, gstTotal, grandTotal, paymentType, created]);
+        INSERT INTO sales(invoice_no, subtotal, discount, gst_total, grand_total, payment_type, customer_name, customer_phone, status, created_at)
+        VALUES(?, ?, ?, ?, ?, ?, ?, ?, 'paid', ?)
+      `, [invoice_no, subtotal, discount, gstTotal, grandTotal, paymentType, customerName, customerPhone, created]);
       const saleId = saleResult.changes?.lastId;
       const lines = calculateCartLines(items, discount);
       for (const line of lines) {
         const item = line.item;
         await this.run(`
-          INSERT INTO sale_items(sale_id, product_id, product_name, quantity, price, gst_percent, gst_amount, line_total)
-          VALUES(?, ?, ?, ?, ?, ?, ?, ?)
-        `, [saleId, item.id, item.product_name, line.quantity, line.unitPrice, item.gst_percent, line.gstAmount, line.lineTotal]);
-        await this.run('UPDATE products SET stock = MAX(stock - ?, 0) WHERE id=?', [item.quantity, item.id]);
+          INSERT INTO sale_items(sale_id, product_id, product_name, quantity, sale_unit, price, gst_percent, gst_amount, line_total)
+          VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `, [saleId, item.id, item.product_name, line.quantity, line.unit, line.unitPrice, item.gst_percent, line.gstAmount, line.lineTotal]);
+        await this.run('UPDATE products SET stock = MAX(stock - ?, 0) WHERE id=?', [line.stockUsed, item.id]);
       }
       await this.run('INSERT INTO payments(sale_id, payment_type, amount, reference_no, created_at) VALUES(?, ?, ?, ?, ?)', [saleId, paymentType, grandTotal, referenceNo, created]);
       return saleId;
     }
 
-    const saleId = await this.fallback.put('sales', { invoice_no, subtotal, discount, gst_total: gstTotal, grand_total: grandTotal, payment_type: paymentType, status: 'paid', created_at: created });
+    const saleId = await this.fallback.put('sales', { invoice_no, subtotal, discount, gst_total: gstTotal, grand_total: grandTotal, payment_type: paymentType, customer_name: customerName, customer_phone: customerPhone, status: 'paid', created_at: created });
     const lines = calculateCartLines(items, discount);
     for (const line of lines) {
       const item = line.item;
-      await this.fallback.put('sale_items', { sale_id: saleId, product_id: item.id, product_name: item.product_name, quantity: line.quantity, price: line.unitPrice, gst_percent: item.gst_percent, gst_amount: line.gstAmount, line_total: line.lineTotal });
-      await this.saveProduct({ ...item, stock: Math.max(0, Number(item.stock) - Number(item.quantity)) });
+      await this.fallback.put('sale_items', { sale_id: saleId, product_id: item.id, product_name: item.product_name, quantity: line.quantity, sale_unit: line.unit, price: line.unitPrice, gst_percent: item.gst_percent, gst_amount: line.gstAmount, line_total: line.lineTotal });
+      await this.saveProduct({ ...item, stock: Math.max(0, Number(item.stock) - stockQuantityUsed(item)) });
     }
     await this.fallback.put('payments', { sale_id: saleId, payment_type: paymentType, amount: grandTotal, reference_no: referenceNo, created_at: created });
     return saleId;
@@ -405,7 +628,8 @@ class POSDatabase {
     rows = rows.sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
     return rows.filter(row => {
       const day = dateOnly(row.created_at);
-      return (!from || day >= from) && (!to || day <= to) && (!payment || row.payment_type === payment) && (!search || row.invoice_no.toLowerCase().includes(search.toLowerCase()));
+      const haystack = `${row.invoice_no} ${row.customer_name || ''} ${row.customer_phone || ''}`.toLowerCase();
+      return (!from || day >= from) && (!to || day <= to) && (!payment || row.payment_type === payment) && (!search || haystack.includes(search.toLowerCase()));
     });
   }
 
@@ -464,9 +688,12 @@ class POSDatabase {
       sale_item_id: item.id,
       id: item.product_id,
       selling_price: Number(item.price),
+      base_quantity: 1,
+      base_unit: item.sale_unit || 'Piece',
+      sale_unit: item.sale_unit || 'Piece',
       quantity: Number(item.quantity)
     }));
-    const subtotal = items.reduce((sum, item) => sum + Number(item.selling_price) * Number(item.quantity), 0);
+    const subtotal = calculateCartLines(items, 0).reduce((sum, line) => sum + line.taxable, 0);
     const discount = Math.min(Math.max(0, Number(updates.discount || 0)), subtotal);
     const lines = calculateCartLines(items, discount);
     const gstTotal = lines.reduce((sum, line) => sum + line.gstAmount, 0);
@@ -483,7 +710,7 @@ class POSDatabase {
     } else {
       await this.fallback.put('sales', { ...before.sale, subtotal, discount, gst_total: gstTotal, grand_total: grandTotal, payment_type: paymentType, status });
       for (const line of lines) {
-        await this.fallback.put('sale_items', { ...line.item, id: line.item.sale_item_id, product_id: line.item.product_id, price: line.unitPrice, gst_amount: line.gstAmount, line_total: line.lineTotal });
+        await this.fallback.put('sale_items', { ...line.item, id: line.item.sale_item_id, product_id: line.item.product_id, sale_unit: line.unit, price: line.unitPrice, gst_amount: line.gstAmount, line_total: line.lineTotal });
       }
       const payments = (await this.fallback.all('payments')).filter(row => Number(row.sale_id) === Number(id));
       for (const payment of payments) await this.fallback.put('payments', { ...payment, payment_type: paymentType, amount: grandTotal });

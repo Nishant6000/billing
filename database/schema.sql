@@ -10,6 +10,9 @@ CREATE TABLE IF NOT EXISTS products (
   product_name TEXT NOT NULL,
   barcode TEXT,
   selling_price REAL NOT NULL DEFAULT 0,
+  base_quantity REAL NOT NULL DEFAULT 1,
+  base_unit TEXT NOT NULL DEFAULT 'Piece',
+  package_units_json TEXT,
   product_discount_type TEXT NOT NULL DEFAULT 'none',
   product_discount_value REAL NOT NULL DEFAULT 0,
   gst_percent REAL NOT NULL DEFAULT 0,
@@ -31,6 +34,8 @@ CREATE TABLE IF NOT EXISTS sales (
   gst_total REAL NOT NULL DEFAULT 0,
   grand_total REAL NOT NULL,
   payment_type TEXT NOT NULL,
+  customer_name TEXT,
+  customer_phone TEXT,
   status TEXT NOT NULL DEFAULT 'paid',
   created_at TEXT NOT NULL
 );
@@ -40,7 +45,8 @@ CREATE TABLE IF NOT EXISTS sale_items (
   sale_id INTEGER NOT NULL,
   product_id INTEGER,
   product_name TEXT NOT NULL,
-  quantity INTEGER NOT NULL,
+  quantity REAL NOT NULL,
+  sale_unit TEXT NOT NULL DEFAULT 'Piece',
   price REAL NOT NULL,
   gst_percent REAL NOT NULL,
   gst_amount REAL NOT NULL,
@@ -56,6 +62,55 @@ CREATE TABLE IF NOT EXISTS payments (
   reference_no TEXT,
   created_at TEXT NOT NULL,
   FOREIGN KEY (sale_id) REFERENCES sales(id)
+);
+
+CREATE TABLE IF NOT EXISTS dining_tables (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  table_name TEXT NOT NULL,
+  area TEXT,
+  seats INTEGER NOT NULL DEFAULT 4,
+  status TEXT NOT NULL DEFAULT 'available',
+  created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS table_orders (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  table_id INTEGER,
+  order_no TEXT NOT NULL,
+  order_type TEXT NOT NULL DEFAULT 'table',
+  status TEXT NOT NULL DEFAULT 'open',
+  note TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS table_order_items (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  order_id INTEGER NOT NULL,
+  product_id INTEGER,
+  product_name TEXT NOT NULL,
+  quantity REAL NOT NULL,
+  sale_unit TEXT NOT NULL DEFAULT 'Piece',
+  item_json TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS kot_tickets (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  order_id INTEGER NOT NULL,
+  table_id INTEGER,
+  kot_no TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'printed',
+  created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS kot_items (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  kot_id INTEGER NOT NULL,
+  product_id INTEGER,
+  product_name TEXT NOT NULL,
+  quantity REAL NOT NULL,
+  sale_unit TEXT NOT NULL DEFAULT 'Piece'
 );
 
 CREATE TABLE IF NOT EXISTS purchases (

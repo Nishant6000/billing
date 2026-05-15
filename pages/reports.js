@@ -1,5 +1,5 @@
 import { db } from '../js/db.js';
-import { $, dateOnly, downloadFile, escapeHtml, money, toCSV } from '../js/utils.js';
+import { $, calculateCart, dateOnly, downloadFile, escapeHtml, formatQuantity, money, toCSV } from '../js/utils.js';
 import { toast } from '../js/ui.js';
 
 let reportChart;
@@ -13,6 +13,7 @@ export const renderReports = async () => {
           <select class="form-select" id="report-type">
             <option value="sales">Sales Summary</option>
             <option value="paid">Paid Bills</option>
+            <option value="unpaid">Saved Unpaid Bills</option>
             <option value="deleted">Deleted Bills</option>
             <option value="modified">Modified Bills</option>
             <option value="returned">Returned Bills</option>
@@ -56,6 +57,7 @@ export const renderReports = async () => {
 const runReport = async () => {
   const type = $('#report-type').value;
   if (['paid', 'returned'].includes(type)) return await runStatusReport(type);
+  if (type === 'unpaid') return await runUnpaidReport();
   if (type !== 'sales') return await runActivityReport(type);
   $('#sales-report-view').classList.remove('d-none');
   $('#activity-report-view').classList.add('d-none');
@@ -74,13 +76,14 @@ const runReport = async () => {
   for (const sale of sales) {
     const items = await db.getSaleItems(sale.id);
     items.forEach(item => {
-      const current = itemMap.get(item.product_name) || { qty: 0, total: 0 };
+      const key = `${item.product_name}|${item.sale_unit || 'Piece'}`;
+      const current = itemMap.get(key) || { name: item.product_name, unit: item.sale_unit || 'Piece', qty: 0, total: 0 };
       current.qty += Number(item.quantity);
       current.total += Number(item.line_total);
-      itemMap.set(item.product_name, current);
+      itemMap.set(key, current);
     });
   }
-  $('#product-report').innerHTML = [...itemMap.entries()].map(([name, row]) => `<tr><td>${name}</td><td>${row.qty}</td><td>${money(row.total)}</td></tr>`).join('');
+  $('#product-report').innerHTML = [...itemMap.values()].map(row => `<tr><td>${escapeHtml(row.name)}</td><td>${formatQuantity(row.qty, row.unit)}</td><td>${money(row.total)}</td></tr>`).join('');
 
   if (window.Chart) {
     reportChart?.destroy();
@@ -128,7 +131,51 @@ const runActivityReport = async (type) => {
 const exportRowsForType = async (type) => {
   if (type === 'sales') return await db.getSales({ from: $('#report-from').value, to: $('#report-to').value });
   if (['paid', 'returned'].includes(type)) return await statusRows(type);
+  if (type === 'unpaid') return await unpaidRows();
   return formatBillActivityForExport(await db.getBillActivity(type, { from: $('#report-from').value, to: $('#report-to').value }));
+};
+
+const runUnpaidReport = async () => {
+  $('#sales-report-view').classList.add('d-none');
+  $('#activity-report-view').classList.remove('d-none');
+  $('#activity-title').textContent = 'Saved Unpaid Bills';
+  const rows = await unpaidRows();
+  $('#activity-report-body').innerHTML = rows.length ? rows.map(row => `
+    <tr>
+      <td><strong>${escapeHtml(row.invoice_no)}</strong><div class="text-muted small">${escapeHtml(row.table || '-')}</div></td>
+      <td><span class="badge-soft">${escapeHtml(row.activity)}</span></td>
+      <td>${escapeHtml(row.note || '-')}</td>
+      <td class="fw-bold">${money(row.bill_amount)}</td>
+      <td>${new Date(row.date).toLocaleString()}</td>
+    </tr>
+  `).join('') : '<tr><td colspan="5" class="text-center text-muted py-4">No saved unpaid bills found.</td></tr>';
+};
+
+const unpaidRows = async () => {
+  const from = $('#report-from').value;
+  const to = $('#report-to').value;
+  const tables = await db.getDiningTables();
+  const tableMap = new Map(tables.map(table => [Number(table.id), table]));
+  const orders = await db.getOpenTableOrders();
+  const rows = [];
+  for (const order of orders) {
+    const day = dateOnly(order.updated_at || order.created_at);
+    if ((from && day < from) || (to && day > to)) continue;
+    const items = await db.getTableOrderItems(order.id);
+    const totals = calculateCart(items, 0);
+    const table = tableMap.get(Number(order.table_id));
+    rows.push({
+      invoice_no: order.order_no,
+      activity: 'saved unpaid',
+      note: order.order_type === 'table' ? 'Table order saved, payment pending' : `${order.order_type} order saved, payment pending`,
+      bill_amount: totals.grandTotal,
+      date: order.updated_at || order.created_at,
+      table: table ? `${table.table_name} (${table.area || 'Dining'})` : order.order_type,
+      item_count: items.length,
+      products: items.map(item => `${item.product_name} x ${formatQuantity(item.quantity, item.sale_unit || item.base_unit || 'Piece')}`).join(' | ')
+    });
+  }
+  return rows.sort((a, b) => String(b.date).localeCompare(String(a.date)));
 };
 
 const statusRows = async (status) => {
@@ -172,7 +219,7 @@ const formatBillActivityForExport = (rows) => rows.map(row => {
     gst_after: numberText(nextSale.gst_total),
     total_after: numberText(nextSale.grand_total),
     product_count: items.length,
-    products: items.map(item => `${item.product_name} x ${item.quantity} @ ${numberText(item.price)} = ${numberText(item.line_total)}`).join(' | ')
+    products: items.map(item => `${item.product_name} x ${formatQuantity(item.quantity, item.sale_unit || 'Piece')} @ ${numberText(item.price)} = ${numberText(item.line_total)}`).join(' | ')
   };
 });
 

@@ -1,5 +1,5 @@
 import { db } from '../js/db.js';
-import { $, debounce, escapeHtml, money } from '../js/utils.js';
+import { $, UNIT_GROUPS, debounce, escapeHtml, formatBasePrice, formatPackingChain, money, parsePackageUnits } from '../js/utils.js';
 import { closeModal, showModal, toast } from '../js/ui.js';
 
 const billingDisplayOptions = [
@@ -15,7 +15,15 @@ const selectedBillingDisplays = (value = 'stock') => {
   return selected.length ? selected : ['stock'];
 };
 
-const productForm = (product = {}, categories = []) => `
+const unitOptionsMarkup = (selected = 'Piece') => Object.entries(UNIT_GROUPS).map(([group, units]) => `
+  <optgroup label="${group.charAt(0).toUpperCase() + group.slice(1)}">
+    ${Object.keys(units).map(unit => `<option value="${unit}" ${unit === selected ? 'selected' : ''}>${unit}</option>`).join('')}
+  </optgroup>
+`).join('');
+
+const productForm = (product = {}, categories = []) => {
+  const packageUnits = parsePackageUnits(product.package_units_json);
+  return `
   <div class="modal-header"><h5 class="modal-title">${product.id ? 'Edit' : 'Add'} Product</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
   <form id="product-form">
     <div class="modal-body">
@@ -25,7 +33,31 @@ const productForm = (product = {}, categories = []) => `
         <div class="col-md-6"><label class="form-label">Product name</label><input class="form-control" name="product_name" value="${escapeHtml(product.product_name || '')}" required></div>
         <div class="col-md-3"><label class="form-label">Barcode</label><input class="form-control" name="barcode" value="${escapeHtml(product.barcode || '')}"></div>
         <div class="col-md-3"><label class="form-label">Category</label><select class="form-select" name="category_id">${categories.map(c => `<option value="${c.id}" ${Number(c.id) === Number(product.category_id) ? 'selected' : ''}>${escapeHtml(c.category_name)}</option>`).join('')}</select></div>
-        <div class="col-md-3"><label class="form-label">Selling price</label><input class="form-control" name="selling_price" type="number" step="0.01" value="${product.selling_price || 0}" required></div>
+        <div class="col-md-3"><label class="form-label">Base Price</label><input class="form-control" name="selling_price" type="number" step="0.01" value="${product.selling_price || 0}" required></div>
+        <div class="col-md-3"><label class="form-label">Base Quantity</label><input class="form-control" name="base_quantity" type="number" min="0.001" step="0.001" value="${product.base_quantity || 1}" required></div>
+        <div class="col-md-3"><label class="form-label">Base Unit</label><select class="form-select" name="base_unit">${unitOptionsMarkup(product.base_unit || 'Piece')}</select></div>
+        <div class="col-12 d-none" id="packing-fields">
+          <div class="packing-panel">
+            <div class="d-flex align-items-center gap-2 mb-2">
+              <i class="fa-solid fa-boxes-stacked text-primary"></i>
+              <strong>Packing Conversion</strong>
+            </div>
+            <div class="row g-3">
+              <div class="col-md-4" data-packing-field="packets_per_box">
+                <label class="form-label">Packets per Box</label>
+                <input class="form-control" name="packets_per_box" type="number" min="0" step="1" value="${packageUnits.packets_per_box || ''}">
+              </div>
+              <div class="col-md-4" data-packing-field="sheets_per_packet">
+                <label class="form-label">Sheets per Packet</label>
+                <input class="form-control" name="sheets_per_packet" type="number" min="0" step="1" value="${packageUnits.sheets_per_packet || ''}">
+              </div>
+              <div class="col-md-4" data-packing-field="tablets_per_sheet">
+                <label class="form-label">Tablets per Sheet</label>
+                <input class="form-control" name="tablets_per_sheet" type="number" min="0" step="1" value="${packageUnits.tablets_per_sheet || ''}">
+              </div>
+            </div>
+          </div>
+        </div>
         <div class="col-md-3"><label class="form-label">Discount Type</label><select class="form-select" name="product_discount_type"><option value="none">No Discount</option><option value="amount" ${product.product_discount_type === 'amount' ? 'selected' : ''}>Amount</option><option value="percent" ${product.product_discount_type === 'percent' ? 'selected' : ''}>Percentage</option></select></div>
         <div class="col-md-3"><label class="form-label">Discount Value</label><input class="form-control" name="product_discount_value" type="number" min="0" step="0.01" value="${product.product_discount_value || 0}"></div>
         <div class="col-md-3"><label class="form-label">GST %</label><input class="form-control" name="gst_percent" type="number" step="0.01" value="${product.gst_percent || 0}"></div>
@@ -60,6 +92,7 @@ const productForm = (product = {}, categories = []) => `
     <div class="modal-footer"><button class="btn btn-light" data-bs-dismiss="modal" type="button">Cancel</button><button class="btn btn-primary-gradient">Save Product</button></div>
   </form>
 `;
+};
 
 const renderRows = async (search = '') => {
   const products = await db.getProducts(search);
@@ -67,7 +100,7 @@ const renderRows = async (search = '') => {
     <tr class="touch-row">
       <td><strong>${escapeHtml(product.product_name)}</strong><div class="text-muted small">${escapeHtml(product.barcode || 'No barcode')}</div></td>
       <td>${escapeHtml(product.category_name || '-')}</td>
-      <td>${money(product.selling_price)}<div class="text-muted small">${productDiscountLabel(product)}</div></td>
+      <td>${formatBasePrice(product)}<div class="text-muted small">${productDiscountLabel(product)}</div>${formatPackingChain(product) ? `<div class="text-muted small">${escapeHtml(formatPackingChain(product))}</div>` : ''}</td>
       <td>${product.gst_percent}%</td>
       <td>${product.stock}<div class="text-muted small">Shelf ${escapeHtml(product.shelf_no || '-')} | Box ${escapeHtml(product.box_no || '-')}</div><div class="text-muted small">Billing: ${billingDisplayLabel(product.billing_display)}</div></td>
       <td class="text-end">
@@ -126,6 +159,8 @@ export const renderProducts = async () => {
 const openProductModal = async (product = {}) => {
   const categories = await db.getCategories();
   showModal(productForm(product, categories));
+  updatePackingFields();
+  $('[name="base_unit"]').addEventListener('change', updatePackingFields);
   $('#product-image-upload').addEventListener('change', async (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -149,6 +184,13 @@ const openProductModal = async (product = {}) => {
       product_name: form.product_name.trim(),
       barcode: form.barcode.trim(),
       selling_price: Number(form.selling_price),
+      base_quantity: Number(form.base_quantity || 1),
+      base_unit: form.base_unit || 'Piece',
+      package_units_json: JSON.stringify({
+        packets_per_box: Number(form.packets_per_box || 0),
+        sheets_per_packet: Number(form.sheets_per_packet || 0),
+        tablets_per_sheet: Number(form.tablets_per_sheet || 0)
+      }),
       product_discount_type: form.product_discount_type || 'none',
       product_discount_value: Number(form.product_discount_value || 0),
       gst_percent: Number(form.gst_percent),
@@ -162,6 +204,23 @@ const openProductModal = async (product = {}) => {
     closeModal();
     toast('Product saved');
     await renderRows($('#product-search')?.value || '');
+  });
+};
+
+const updatePackingFields = () => {
+  const baseUnit = $('[name="base_unit"]')?.value || 'Piece';
+  const panel = $('#packing-fields');
+  if (!panel) return;
+  const visibleFields = {
+    Box: ['packets_per_box', 'sheets_per_packet', 'tablets_per_sheet'],
+    Packet: ['sheets_per_packet', 'tablets_per_sheet'],
+    Sheet: ['tablets_per_sheet'],
+    Tablet: []
+  }[baseUnit] || [];
+  panel.classList.toggle('d-none', !['Box', 'Packet', 'Sheet'].includes(baseUnit));
+  ['packets_per_box', 'sheets_per_packet', 'tablets_per_sheet'].forEach(name => {
+    const field = $(`[data-packing-field="${name}"]`);
+    if (field) field.classList.toggle('d-none', !visibleFields.includes(name));
   });
 };
 

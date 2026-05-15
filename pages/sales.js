@@ -1,5 +1,5 @@
 import { db } from '../js/db.js';
-import { $, dateOnly, debounce, escapeHtml, money } from '../js/utils.js';
+import { $, dateOnly, debounce, escapeHtml, formatQuantity, money } from '../js/utils.js';
 import { closeModal, showModal, toast } from '../js/ui.js';
 
 const renderRows = async () => {
@@ -11,12 +11,13 @@ const renderRows = async () => {
   });
   $('#sales-body').innerHTML = sales.map(sale => `
     <tr class="touch-row">
-      <td><strong>${escapeHtml(sale.invoice_no)}</strong><div class="text-muted small">${new Date(sale.created_at).toLocaleString()}</div></td>
+      <td><strong>${escapeHtml(sale.invoice_no)}</strong><div class="text-muted small">${new Date(sale.created_at).toLocaleString()}</div>${sale.customer_name || sale.customer_phone ? `<div class="text-muted small">${escapeHtml(sale.customer_name || 'Customer')} ${escapeHtml(sale.customer_phone || '')}</div>` : ''}</td>
       <td><span class="badge-soft">${sale.payment_type}</span><div class="text-muted small">${escapeHtml(sale.status || 'paid')}</div></td>
       <td>${money(sale.gst_total)}</td>
       <td class="fw-bold">${money(sale.grand_total)}</td>
       <td class="text-end">
         <button class="btn btn-sm btn-outline-primary" data-view="${sale.id}"><i class="fa-solid fa-eye"></i></button>
+        <button class="btn btn-sm btn-outline-success" data-whatsapp="${sale.id}" title="Send WhatsApp"><i class="fa-brands fa-whatsapp"></i></button>
         <button class="btn btn-sm btn-outline-success" data-modify="${sale.id}"><i class="fa-solid fa-pen-to-square"></i></button>
         <button class="btn btn-sm btn-outline-secondary" data-reprint="${sale.id}"><i class="fa-solid fa-print"></i></button>
         <button class="btn btn-sm btn-outline-warning" data-return="${sale.id}"><i class="fa-solid fa-rotate-left"></i></button>
@@ -57,8 +58,9 @@ export const renderSales = async () => {
   $('#sales-body').addEventListener('click', async (event) => {
     const button = event.target.closest('button');
     if (!button) return;
-    const id = button.dataset.view || button.dataset.modify || button.dataset.reprint || button.dataset.return || button.dataset.delete;
+    const id = button.dataset.view || button.dataset.whatsapp || button.dataset.modify || button.dataset.reprint || button.dataset.return || button.dataset.delete;
     const sale = (await db.getSales()).find(row => Number(row.id) === Number(id));
+    if (button.dataset.whatsapp) return await sendSaleOnWhatsApp(sale);
     if (button.dataset.modify) return await openModifySale(sale);
     if (button.dataset.delete && confirm('Delete this bill?')) {
       await db.deleteSale(id);
@@ -101,17 +103,53 @@ const openModifySale = async (sale) => {
 
 const showSale = async (sale, shouldPrint = false) => {
   const items = await db.getSaleItems(sale.id);
+  const whatsappUrl = await saleWhatsAppUrl(sale, items);
   showModal(`
     <div class="modal-header"><h5 class="modal-title">${escapeHtml(sale.invoice_no)}</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
     <div class="modal-body">
       <div class="receipt-preview print-area">
-        <p>Date: ${new Date(sale.created_at).toLocaleString()}<br>Payment: ${sale.payment_type}</p>
-        <table class="table table-sm"><tbody>${items.map(item => `<tr><td>${escapeHtml(item.product_name)}</td><td>${item.quantity}</td><td class="text-end">${money(item.line_total)}</td></tr>`).join('')}</tbody></table>
+        <p>Date: ${new Date(sale.created_at).toLocaleString()}<br>Payment: ${sale.payment_type}${sale.customer_name ? `<br>Customer: ${escapeHtml(sale.customer_name)}` : ''}${sale.customer_phone ? `<br>Mobile: ${escapeHtml(sale.customer_phone)}` : ''}</p>
+        <table class="table table-sm"><tbody>${items.map(item => `<tr><td>${escapeHtml(item.product_name)}</td><td>${formatQuantity(item.quantity, item.sale_unit || 'Piece')}</td><td class="text-end">${money(item.line_total)}</td></tr>`).join('')}</tbody></table>
         <p>GST: ${money(sale.gst_total)}<br>Discount: ${money(sale.discount)}</p>
         <h5>Total: ${money(sale.grand_total)}</h5>
       </div>
     </div>
-    <div class="modal-footer"><button class="btn btn-primary-gradient" onclick="window.print()"><i class="fa-solid fa-print"></i> Print</button></div>
+    <div class="modal-footer">
+      <a class="btn btn-outline-success" href="${whatsappUrl}" target="_blank" rel="noopener"><i class="fa-brands fa-whatsapp"></i> Send WhatsApp</a>
+      <button class="btn btn-outline-primary" onclick="window.print()"><i class="fa-solid fa-file-pdf"></i> Save PDF</button>
+      <button class="btn btn-outline-success" id="sales-save-send-whatsapp"><i class="fa-solid fa-file-pdf"></i> Save & Send PDF</button>
+      <button class="btn btn-primary-gradient" onclick="window.print()"><i class="fa-solid fa-print"></i> Print</button>
+    </div>
   `);
+  $('#sales-save-send-whatsapp')?.addEventListener('click', () => {
+    window.print();
+    setTimeout(() => window.open(whatsappUrl, '_blank', 'noopener'), 700);
+  });
   if (shouldPrint) setTimeout(() => window.print(), 350);
+};
+
+const sendSaleOnWhatsApp = async (sale) => {
+  const items = await db.getSaleItems(sale.id);
+  window.open(await saleWhatsAppUrl(sale, items), '_blank', 'noopener');
+};
+
+const saleWhatsAppUrl = async (sale, items) => {
+  const settings = await db.getSettings();
+  const phone = String(sale.customer_phone || '').replace(/\D/g, '');
+  const lines = items.map(item => `${item.product_name} - ${formatQuantity(item.quantity, item.sale_unit || 'Piece')} - ${money(item.line_total)}`).join('\n');
+  const message = encodeURIComponent([
+    `${settings.shop_name || 'Zento POS'} Bill`,
+    `Invoice: ${sale.invoice_no}`,
+    sale.customer_name ? `Customer: ${sale.customer_name}` : '',
+    `Date: ${new Date(sale.created_at).toLocaleString()}`,
+    '',
+    lines,
+    '',
+    `GST: ${money(sale.gst_total)}`,
+    `Discount: ${money(sale.discount)}`,
+    `Total: ${money(sale.grand_total)}`,
+    '',
+    settings.footer_text || 'Thank you.'
+  ].filter(Boolean).join('\n'));
+  return phone ? `https://wa.me/${phone}?text=${message}` : `https://wa.me/?text=${message}`;
 };

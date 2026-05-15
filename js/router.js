@@ -3,6 +3,7 @@ import { $, $$ } from './utils.js';
 import { setTitle } from './ui.js';
 import { renderDashboard } from '../pages/dashboard.js';
 import { renderBilling } from '../pages/billing.js';
+import { renderTables } from '../pages/tables.js';
 import { renderProducts } from '../pages/products.js';
 import { renderPurchaseEntry, renderPurchaseHistory } from '../pages/purchase.js';
 import { renderSales } from '../pages/sales.js';
@@ -17,6 +18,7 @@ import { renderPlaceholder } from '../pages/placeholders.js';
 const routes = {
   dashboard: renderDashboard,
   billing: renderBilling,
+  tables: renderTables,
   products: renderProducts,
   purchase: renderPurchaseEntry,
   'purchase-history': renderPurchaseHistory,

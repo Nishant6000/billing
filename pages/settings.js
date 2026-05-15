@@ -17,6 +17,7 @@ export const renderSettings = async () => {
         <div class="col-md-4"><label class="form-label">GST Settings</label><select class="form-select" name="gst_enabled"><option value="true">Enabled</option><option value="false" ${settings.gst_enabled === 'false' ? 'selected' : ''}>Disabled</option></select></div>
         <div class="col-md-4"><label class="form-label">Printer Paper</label><select class="form-select" name="paper_size"><option>80mm</option><option ${settings.paper_size === '58mm' ? 'selected' : ''}>58mm</option></select></div>
         <div class="col-md-4"><label class="form-label">Theme</label><select class="form-select" name="theme"><option>Professional Light</option><option>Dark POS</option></select></div>
+        <div class="col-md-4"><label class="form-label">Billing Mode</label><select class="form-select" name="billing_mode"><option value="direct">Direct Billing</option><option value="table" ${settings.billing_mode === 'table' ? 'selected' : ''}>Table Based Billing</option></select></div>
         <div class="col-12"><label class="form-label">Footer text</label><input class="form-control" name="footer_text" value="${escapeHtml(settings.footer_text || '')}"></div>
       </div>
       <hr>
