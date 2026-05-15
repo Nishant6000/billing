@@ -41,5 +41,5 @@ createServer((req, res) => {
     res.end(error.message);
   }
 }).listen(port, () => {
-  console.log(`Zento POS running at http://localhost:${port}`);
+  console.log(`Ginsoft POS running at http://localhost:${port}`);
 });

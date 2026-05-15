@@ -20,7 +20,7 @@ export const renderBackup = async () => {
         <div class="pos-card h-100">
           <div class="metric-icon mb-3" style="background:linear-gradient(135deg,#f59e0b,#ef4444)"><i class="fa-solid fa-upload"></i></div>
           <h2 class="section-title">Restore Database</h2>
-          <p class="text-muted">Upload a Zento POS backup file. Restore replaces current local data with the backup data.</p>
+          <p class="text-muted">Upload a Ginsoft POS backup file. Restore replaces current local data with the backup data.</p>
           <input class="form-control" id="backup-file" type="file" accept="application/json,.json">
           <div class="mt-3" id="restore-preview"></div>
           <button class="btn btn-outline-danger mt-3" id="restore-backup" disabled><i class="fa-solid fa-database"></i> Restore Backup</button>
@@ -54,7 +54,7 @@ export const renderBackup = async () => {
 const downloadBackup = async () => {
   const backup = await db.exportBackup();
   const stamp = new Date().toISOString().replaceAll(':', '-').slice(0, 19);
-  const filename = `zento-pos-backup-${stamp}.json`;
+  const filename = `ginsoft-pos-backup-${stamp}.json`;
   downloadFile(filename, JSON.stringify(backup, null, 2), 'application/json');
   $('#backup-status').textContent = `Backup created: ${filename}`;
   toast('Backup downloaded');

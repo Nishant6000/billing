@@ -1,4 +1,4 @@
-# Zento POS
+# Ginsoft POS
 
 Complete browser-first POS application built with HTML5, CSS3, Bootstrap 5, Vanilla JavaScript, SQLite via Capacitor, and Jeep SQLite web support.
 

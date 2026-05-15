@@ -24,6 +24,61 @@ body {
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
+.splash-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background:
+    radial-gradient(circle at top left, rgba(14, 165, 233, .25), transparent 22rem),
+    radial-gradient(circle at bottom right, rgba(34, 197, 94, .25), transparent 22rem),
+    linear-gradient(135deg, #ffffff 0%, #eff6ff 52%, #dcfce7 100%);
+  transition: opacity .45s ease, visibility .45s ease;
+}
+.splash-screen.hide {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+.splash-card {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  text-align: center;
+  animation: splashRise .55s ease both;
+}
+.splash-logo {
+  display: grid;
+  place-items: center;
+  width: 86px;
+  height: 86px;
+  border-radius: 28px;
+  color: #fff;
+  background: linear-gradient(135deg, #2563eb, #16a34a);
+  box-shadow: 0 24px 50px rgba(37, 99, 235, .28);
+  font-size: 2.2rem;
+}
+.splash-card h1 {
+  margin: 8px 0 0;
+  color: #0f172a;
+  font-size: clamp(2.1rem, 5vw, 4rem);
+  font-weight: 950;
+}
+.splash-card p {
+  margin: 0;
+  color: #475569;
+  font-size: 1rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+}
+@keyframes splashRise {
+  from { opacity: 0; transform: translateY(14px) scale(.98); }
+  to { opacity: 1; transform: none; }
+}
+
 .app-shell {
   display: grid;
   grid-template-columns: 290px 1fr;
@@ -39,9 +94,12 @@ body {
   height: 100vh;
   max-height: 100vh;
   padding: 22px;
-  color: #e5e7eb;
-  background: linear-gradient(160deg, #0f172a 0%, #111827 52%, #172554 100%);
-  box-shadow: 14px 0 40px rgba(15, 23, 42, .18);
+  color: #1e293b;
+  background:
+    linear-gradient(160deg, rgba(255, 255, 255, .94) 0%, rgba(239, 246, 255, .96) 45%, rgba(220, 252, 231, .92) 100%),
+    radial-gradient(circle at top left, rgba(14, 165, 233, .24), transparent 18rem),
+    radial-gradient(circle at bottom right, rgba(34, 197, 94, .22), transparent 18rem);
+  box-shadow: 14px 0 40px rgba(37, 99, 235, .14);
   z-index: 20;
   overflow: hidden;
   transition: padding .22s ease, width .22s ease;
@@ -65,7 +123,7 @@ body {
   box-shadow: 0 14px 30px rgba(37, 99, 235, .35);
 }
 .brand strong { display: block; font-size: 1.1rem; }
-.brand span { color: #94a3b8; font-size: .8rem; }
+.brand span { color: #64748b; font-size: .8rem; }
 .brand-text {
   min-width: 0;
   white-space: nowrap;
@@ -81,11 +139,11 @@ body {
   margin-left: auto;
   border: 0;
   border-radius: 12px;
-  color: #cbd5e1;
-  background: rgba(255, 255, 255, .10);
+  color: #2563eb;
+  background: rgba(37, 99, 235, .10);
   transition: transform .2s ease, background .18s ease;
 }
-.sidebar-collapse-btn:hover { background: rgba(255, 255, 255, .18); }
+.sidebar-collapse-btn:hover { color: #fff; background: linear-gradient(135deg, #2563eb, #16a34a); }
 .nav-menu {
   display: grid;
   gap: 6px;
@@ -95,11 +153,11 @@ body {
   overflow-x: hidden;
   padding: 4px 2px 10px;
   scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, .28) transparent;
+  scrollbar-color: rgba(37, 99, 235, .28) transparent;
 }
 .nav-menu::-webkit-scrollbar { width: 6px; }
 .nav-menu::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, .25);
+  background: rgba(37, 99, 235, .25);
   border-radius: 999px;
 }
 .nav-link-pos {
@@ -108,17 +166,19 @@ body {
   gap: 12px;
   min-height: 44px;
   padding: 10px 12px;
-  color: #cbd5e1;
+  color: #334155;
   text-decoration: none;
   border-radius: 14px;
   transition: transform .18s ease, background .18s ease, color .18s ease;
 }
 .nav-link-pos:hover, .nav-link-pos.active {
-  color: #fff;
-  background: rgba(255, 255, 255, .12);
+  color: #0f172a;
+  background: linear-gradient(135deg, rgba(255, 255, 255, .95), rgba(219, 234, 254, .95));
+  box-shadow: 0 12px 26px rgba(37, 99, 235, .14);
   transform: translateX(3px);
 }
-.nav-link-pos i { width: 22px; text-align: center; }
+.nav-link-pos i { width: 22px; text-align: center; color: #2563eb; }
+.nav-link-pos.active i { color: #16a34a; }
 .nav-link-pos span {
   white-space: nowrap;
   overflow: hidden;
@@ -133,9 +193,9 @@ body {
 }
 .sidebar-collapsed .sidebar-collapse-btn {
   position: absolute;
-  right: -15px;
+  right: 12px;
   top: 26px;
-  color: #111827;
+  color: #2563eb;
   background: #fff;
   box-shadow: var(--shadow);
   transform: rotate(180deg);
@@ -550,8 +610,8 @@ body {
   .sidebar-collapsed .sidebar-collapse-btn {
     position: static;
     margin-left: auto;
-    color: #cbd5e1;
-    background: rgba(255, 255, 255, .10);
+    color: #2563eb;
+    background: rgba(37, 99, 235, .10);
     box-shadow: none;
     transform: none;
   }

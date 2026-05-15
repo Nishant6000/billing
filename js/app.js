@@ -3,6 +3,13 @@ import { $ } from './utils.js';
 import { initRouter, navigate } from './router.js';
 import { toast } from './ui.js';
 
+const hideSplash = () => {
+  const splash = $('#splash-screen');
+  if (!splash) return;
+  splash.classList.add('hide');
+  setTimeout(() => splash.remove(), 600);
+};
+
 const updateDbStatus = (mode) => {
   const status = $('#db-status');
   const isFallback = mode === 'indexeddb';
@@ -14,7 +21,7 @@ const updateDbStatus = (mode) => {
 
 const updateShopNameLabel = async () => {
   const settings = await db.getSettings();
-  $('#shop-name-label').textContent = settings.shop_name || 'Zento POS Store';
+  $('#shop-name-label').textContent = settings.shop_name || 'Ginsoft POS Store';
 };
 
 const bindGlobalActions = () => {
@@ -62,6 +69,7 @@ const bindGlobalActions = () => {
 window.POS = { db, navigate };
 
 try {
+  setTimeout(hideSplash, 3000);
   bindGlobalActions();
   const mode = await db.init();
   updateDbStatus(mode);
@@ -69,6 +77,7 @@ try {
   await initRouter();
   toast(mode === 'sqlite' ? 'SQLite database initialized' : 'Running with browser IndexedDB fallback', mode === 'sqlite' ? 'success' : 'warning');
 } catch (error) {
+  setTimeout(hideSplash, 3000);
   console.error(error);
   $('#view').innerHTML = `
     <div class="alert alert-danger m-4">

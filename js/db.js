@@ -777,8 +777,8 @@ class POSDatabase {
         : await this.fallback.all(table);
     }
     return {
-      app: 'Zento POS',
-      format: 'zento-pos-json-backup',
+      app: 'Ginsoft POS',
+      format: 'ginsoft-pos-json-backup',
       version: 1,
       dbVersion: APP_CONFIG.dbVersion,
       exportedAt: todayISO(),

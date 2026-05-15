@@ -1,6 +1,6 @@
 {
-  "name": "Zento POS",
-  "short_name": "Zento POS",
+  "name": "Ginsoft POS",
+  "short_name": "Ginsoft POS",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#f8fafc",

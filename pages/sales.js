@@ -138,7 +138,7 @@ const saleWhatsAppUrl = async (sale, items) => {
   const phone = String(sale.customer_phone || '').replace(/\D/g, '');
   const lines = items.map(item => `${item.product_name} - ${formatQuantity(item.quantity, item.sale_unit || 'Piece')} - ${money(item.line_total)}`).join('\n');
   const message = encodeURIComponent([
-    `${settings.shop_name || 'Zento POS'} Bill`,
+    `${settings.shop_name || 'Ginsoft POS'} Bill`,
     `Invoice: ${sale.invoice_no}`,
     sale.customer_name ? `Customer: ${sale.customer_name}` : '',
     `Date: ${new Date(sale.created_at).toLocaleString()}`,

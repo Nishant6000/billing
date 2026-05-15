@@ -4,6 +4,9 @@ import { closeModal, showModal, toast } from '../js/ui.js';
 
 let cart = [];
 let activeRestaurantContext = null;
+let billingBarcodeStream = null;
+let billingBarcodeTimer = null;
+let billingBarcodeDetector = null;
 
 const resetManualDiscount = () => {
   const discountInput = $('#discount');
@@ -115,7 +118,12 @@ export const renderBilling = async () => {
       <div class="col-xl-8">
         <div class="pos-card mb-3">
           <div class="row g-2 align-items-center">
-            <div class="col-lg-8"><input class="form-control form-control-lg" id="billing-search" placeholder="Search product or scan barcode"></div>
+            <div class="col-lg-8">
+              <div class="input-group input-group-lg">
+                <input class="form-control" id="billing-search" placeholder="Search product or scan barcode">
+                <button class="btn btn-outline-primary" id="billing-camera-scan" title="Scan barcode with camera"><i class="fa-solid fa-camera"></i></button>
+              </div>
+            </div>
             <div class="col-lg-4"><button class="btn btn-outline-secondary w-100 h-100" id="resume-bill"><i class="fa-solid fa-clock-rotate-left"></i> Resume Hold</button></div>
           </div>
         </div>
@@ -132,6 +140,7 @@ export const renderBilling = async () => {
           <input class="form-control" id="discount" type="number" value="0" min="0">
           <div class="mt-3" id="cart-totals"></div>
           <div class="d-grid gap-2 mt-3">
+            ${settings.weight_enabled === 'true' ? '<button class="btn btn-outline-primary" id="capture-weight"><i class="fa-solid fa-scale-balanced"></i> Capture Weight</button>' : ''}
             <button class="btn btn-primary-gradient btn-lg" id="pay-now"><i class="fa-solid fa-wallet"></i> Payment</button>
             <button class="btn btn-outline-secondary" id="hold-bill"><i class="fa-solid fa-pause"></i> Hold Bill</button>
           </div>
@@ -199,8 +208,28 @@ export const renderBilling = async () => {
     toast('Bill held');
   });
   $('#resume-bill').addEventListener('click', openHoldBills);
+  $('#capture-weight')?.addEventListener('click', openWeightCapture);
+  $('#billing-camera-scan').addEventListener('click', openBillingBarcodeScanner);
   $('#pay-now').addEventListener('click', openPayment);
   await addPendingBarcodeToCart();
+};
+
+const openWeightCapture = () => {
+  showModal(`
+    <div class="modal-header"><h5 class="modal-title">Capture Weight</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body">
+      <div class="cash-payment-box">
+        <div class="d-flex align-items-center gap-3">
+          <i class="fa-solid fa-scale-balanced fs-2 text-primary"></i>
+          <div>
+            <h6 class="mb-1">Bluetooth weighing scale ready point</h6>
+            <p class="text-muted mb-0">In the next phase this button will read live weight from the billing machine through Bluetooth and apply it to the selected weight product.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-primary-gradient" data-bs-dismiss="modal">OK</button></div>
+  `);
 };
 
 const renderTableBilling = async () => {
@@ -257,7 +286,10 @@ const openRestaurantOrder = async (context) => {
             <div><h2 class="section-title mb-1">${escapeHtml(context.label)} Order</h2><p class="text-muted mb-0">${order ? `Running order ${escapeHtml(order.order_no)}` : 'New running order'}</p></div>
             <button class="btn btn-outline-secondary" id="back-to-tables"><i class="fa-solid fa-arrow-left"></i> Tables</button>
           </div>
-          <input class="form-control form-control-lg" id="billing-search" placeholder="Search item or scan barcode">
+          <div class="input-group input-group-lg">
+            <input class="form-control" id="billing-search" placeholder="Search item or scan barcode">
+            <button class="btn btn-outline-primary" id="billing-camera-scan" title="Scan barcode with camera"><i class="fa-solid fa-camera"></i></button>
+          </div>
         </div>
         <div class="row g-3" id="billing-products"></div>
       </div>
@@ -291,6 +323,7 @@ const bindRestaurantOrderEvents = () => {
   $('#billing-search').addEventListener('keydown', async (event) => {
     if (event.key === 'Enter') $('#billing-products [data-product]')?.click();
   });
+  $('#billing-camera-scan').addEventListener('click', openBillingBarcodeScanner);
   $('#billing-products').addEventListener('click', async (event) => {
     const id = event.target.closest('[data-product]')?.dataset.product;
     if (id) await addProductToCart(id);
@@ -391,6 +424,87 @@ const addPendingBarcodeToCart = async () => {
   } else {
     toast('No product found for scanned barcode', 'warning');
   }
+};
+
+const openBillingBarcodeScanner = async () => {
+  showModal(`
+    <div class="modal-header"><h5 class="modal-title">Scan Barcode</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body">
+      <div class="barcode-camera-frame">
+        <video id="billing-barcode-video" muted playsinline></video>
+        <div class="barcode-scan-line"></div>
+      </div>
+      <div class="alert alert-info mt-3 mb-0" id="billing-barcode-status">Starting camera...</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline-danger" id="stop-billing-barcode"><i class="fa-solid fa-stop"></i> Stop</button>
+    </div>
+  `);
+  $('#stop-billing-barcode').addEventListener('click', () => {
+    stopBillingBarcodeScanner();
+    closeModal();
+  });
+  $('#app-modal').addEventListener('hidden.bs.modal', stopBillingBarcodeScanner, { once: true });
+  await startBillingBarcodeScanner();
+};
+
+const startBillingBarcodeScanner = async () => {
+  if (!('BarcodeDetector' in window)) {
+    $('#billing-barcode-status').className = 'alert alert-warning mt-3 mb-0';
+    $('#billing-barcode-status').textContent = 'Camera barcode scanning is not supported in this browser. Use manual search or Bluetooth scanner.';
+    return;
+  }
+  try {
+    billingBarcodeDetector = billingBarcodeDetector || new BarcodeDetector({ formats: ['ean_13', 'ean_8', 'code_128', 'code_39', 'upc_a', 'upc_e', 'qr_code'] });
+    billingBarcodeStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+    const video = $('#billing-barcode-video');
+    video.srcObject = billingBarcodeStream;
+    await video.play();
+    $('#billing-barcode-status').className = 'alert alert-success mt-3 mb-0';
+    $('#billing-barcode-status').textContent = 'Point the camera at a barcode.';
+    scanBillingBarcodeLoop();
+  } catch (error) {
+    $('#billing-barcode-status').className = 'alert alert-danger mt-3 mb-0';
+    $('#billing-barcode-status').textContent = `Unable to open camera: ${error.message}`;
+  }
+};
+
+const scanBillingBarcodeLoop = async () => {
+  if (!billingBarcodeStream || !billingBarcodeDetector) return;
+  try {
+    const codes = await billingBarcodeDetector.detect($('#billing-barcode-video'));
+    if (codes.length) {
+      await addBarcodeToCurrentBill(codes[0].rawValue);
+      return;
+    }
+  } catch (_) {}
+  billingBarcodeTimer = setTimeout(scanBillingBarcodeLoop, 500);
+};
+
+const stopBillingBarcodeScanner = () => {
+  clearTimeout(billingBarcodeTimer);
+  billingBarcodeTimer = null;
+  billingBarcodeStream?.getTracks().forEach(track => track.stop());
+  billingBarcodeStream = null;
+  const video = $('#billing-barcode-video');
+  if (video) video.srcObject = null;
+};
+
+const addBarcodeToCurrentBill = async (code) => {
+  if (!code) return;
+  stopBillingBarcodeScanner();
+  const products = await db.getProducts(code);
+  const product = products.find(item => String(item.barcode || '') === String(code)) || products[0];
+  if (!product) {
+    $('#billing-barcode-status').className = 'alert alert-warning mt-3 mb-0';
+    $('#billing-barcode-status').textContent = `No product found for barcode ${code}.`;
+    return;
+  }
+  await addProductToCart(product.id);
+  $('#billing-search').value = code;
+  await renderProducts(code);
+  closeModal();
+  toast(`${product.product_name} added to bill`);
 };
 
 const openPayment = async (options = {}) => {
@@ -499,7 +613,7 @@ const receiptMessage = (settings, invoice, items, totals, customer = {}) => {
     .map(line => `${line.item.product_name} - ${formatQuantity(line.quantity, line.unit)} - ${money(line.taxableAfterDiscount)}`)
     .join('\n');
   return [
-    `${settings.shop_name || 'Zento POS'} Bill`,
+    `${settings.shop_name || 'Ginsoft POS'} Bill`,
     `Invoice: ${invoice}`,
     customer.customerName ? `Customer: ${customer.customerName}` : '',
     `Date: ${new Date().toLocaleString()}`,
