@@ -35,7 +35,9 @@ const routes = {
 };
 
 export const renderNav = () => {
-  const routes = visibleRoutesForUser(getCurrentUser());
+  const billingMode = localStorage.getItem('pos-billing-mode') || 'direct';
+  const routes = visibleRoutesForUser(getCurrentUser())
+    .filter(route => billingMode === 'table' || route.id !== 'tables');
   $('#nav-menu').innerHTML = routes.map(route => `
     <a class="nav-link-pos" href="#/${route.id}" data-route="${route.id}" title="${route.title}">
       <i class="fa-solid ${route.icon}"></i><span>${route.title}</span>

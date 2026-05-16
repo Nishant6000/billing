@@ -41,8 +41,17 @@ export const renderBarcode = async () => {
             <h2 class="section-title mb-0">Bluetooth Scanner</h2>
             <span class="badge-soft"><i class="fa-solid fa-keyboard me-1"></i> Test</span>
           </div>
-          <input class="form-control form-control-lg" id="bluetooth-scan-input" placeholder="Focus here and scan barcode">
-          <div class="small text-muted mt-2">Bluetooth scanner works like keyboard input. Last scan: <strong id="last-scan">None</strong></div>
+          <div class="demo-barcode-card" id="bluetooth-scan-zone" tabindex="0" role="button" aria-label="Bluetooth barcode scanner">
+            <input class="scanner-capture-input" id="bluetooth-scan-input" autocomplete="off">
+            <div class="demo-barcode">
+              <span style="--w:3"></span><span style="--w:1"></span><span style="--w:2"></span><span style="--w:4"></span>
+              <span style="--w:1"></span><span style="--w:3"></span><span style="--w:2"></span><span style="--w:1"></span>
+              <span style="--w:4"></span><span style="--w:2"></span><span style="--w:1"></span><span style="--w:3"></span>
+              <span style="--w:1"></span><span style="--w:2"></span><span style="--w:4"></span><span style="--w:1"></span>
+            </div>
+            <div class="demo-barcode-number">8901 0000 0001</div>
+          </div>
+          <div class="small text-muted mt-2">Last scan: <strong id="last-scan">None</strong></div>
         </div>
 
         <form class="pos-card" id="barcode-settings-form">
@@ -70,6 +79,8 @@ export const renderBarcode = async () => {
 const bindBarcodeEvents = () => {
   $('#start-camera').addEventListener('click', startCamera);
   $('#stop-camera').addEventListener('click', stopCamera);
+  $('#bluetooth-scan-zone').addEventListener('click', () => $('#bluetooth-scan-input').focus());
+  $('#bluetooth-scan-input').focus();
   $('#bluetooth-scan-input').addEventListener('keydown', event => {
     if (event.key !== 'Enter') return;
     event.preventDefault();

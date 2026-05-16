@@ -104,16 +104,15 @@ const openModifySale = async (sale) => {
 
 const showSale = async (sale, shouldPrint = false) => {
   const items = await db.getSaleItems(sale.id);
+  const settings = await db.getSettings();
   const whatsappUrl = await saleWhatsAppUrl(sale, items);
+  const receiptHtml = (settings.printer_theme || 'thermal') === 'desktop'
+    ? desktopInvoiceHtml(settings, sale, items)
+    : thermalReceiptHtml(settings, sale, items);
   showModal(`
     <div class="modal-header"><h5 class="modal-title">${escapeHtml(sale.invoice_no)}</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
     <div class="modal-body">
-      <div class="receipt-preview print-area">
-        <p>Date: ${new Date(sale.created_at).toLocaleString()}<br>Payment: ${sale.payment_type}${sale.customer_name ? `<br>Customer: ${escapeHtml(sale.customer_name)}` : ''}${sale.customer_phone ? `<br>Mobile: ${escapeHtml(sale.customer_phone)}` : ''}</p>
-        <table class="table table-sm"><tbody>${items.map(item => `<tr><td>${escapeHtml(item.product_name)}</td><td>${formatQuantity(item.quantity, item.sale_unit || 'Piece')}</td><td class="text-end">${money(item.line_total)}</td></tr>`).join('')}</tbody></table>
-        <p>GST: ${money(sale.gst_total)}<br>Discount: ${money(sale.discount)}</p>
-        <h5>Total: ${money(sale.grand_total)}</h5>
-      </div>
+      ${receiptHtml}
     </div>
     <div class="modal-footer">
       <a class="btn btn-outline-success" href="${whatsappUrl}" target="_blank" rel="noopener"><i class="fa-brands fa-whatsapp"></i> Send WhatsApp</a>
@@ -127,6 +126,108 @@ const showSale = async (sale, shouldPrint = false) => {
     setTimeout(() => window.open(whatsappUrl, '_blank', 'noopener'), 700);
   });
   if (shouldPrint) setTimeout(() => window.print(), 350);
+};
+
+const thermalReceiptHtml = (settings, sale, items) => `
+  <div class="receipt-preview print-area receipt-theme-thermal">
+    ${settings.receipt_logo ? `<img class="receipt-logo" src="${escapeHtml(settings.receipt_logo)}" alt="Receipt logo">` : ''}
+    <h5 class="text-center">${escapeHtml(settings.receipt_header || settings.shop_name || 'Receipt')}</h5>
+    <p>Date: ${new Date(sale.created_at).toLocaleString()}<br>Payment: ${escapeHtml(sale.payment_type)}${sale.customer_name ? `<br>Customer: ${escapeHtml(sale.customer_name)}` : ''}${sale.customer_phone ? `<br>Mobile: ${escapeHtml(sale.customer_phone)}` : ''}</p>
+    <table class="table table-sm"><tbody>${items.map(item => `<tr><td>${escapeHtml(item.product_name)}</td><td>${formatQuantity(item.quantity, item.sale_unit || 'Piece')}</td><td class="text-end">${money(item.line_total)}</td></tr>`).join('')}</tbody></table>
+    <p>GST: ${money(sale.gst_total)}<br>Discount: ${money(sale.discount)}</p>
+    <h5>Total: ${money(sale.grand_total)}</h5>
+    <p class="text-center">${escapeHtml(settings.receipt_footer || settings.footer_text || '')}</p>
+  </div>
+`;
+
+const desktopInvoiceHtml = (settings, sale, items) => {
+  const subtotal = Number(sale.subtotal || 0);
+  const discount = Number(sale.discount || 0);
+  const gst = Number(sale.gst_total || 0);
+  const total = Number(sale.grand_total || 0);
+  return `
+    <div class="receipt-preview print-area receipt-theme-desktop tally-invoice">
+      <div class="tally-title">${escapeHtml(settings.receipt_header || 'Tax Invoice')}</div>
+      <div class="tally-shop-row">
+        <div class="tally-logo-cell">${settings.receipt_logo ? `<img class="receipt-logo" src="${escapeHtml(settings.receipt_logo)}" alt="Receipt logo">` : ''}</div>
+        <div class="tally-shop-details">
+          <h4>${escapeHtml(settings.shop_name || 'Ginsoft POS')}</h4>
+          <p>${escapeHtml(settings.shop_address || '')}</p>
+          <p>GSTIN: ${escapeHtml(settings.gstin || '-')} | Phone: ${escapeHtml(settings.phone || '-')}</p>
+        </div>
+      </div>
+      <div class="tally-info-grid">
+        <div>
+          <strong>Bill To</strong>
+          <p>${escapeHtml(sale.customer_name || 'Walk-in Customer')}</p>
+          <p>Mobile: ${escapeHtml(sale.customer_phone || '-')}</p>
+        </div>
+        <div>
+          <p><strong>Invoice No:</strong> ${escapeHtml(sale.invoice_no)}</p>
+          <p><strong>Date:</strong> ${new Date(sale.created_at).toLocaleString()}</p>
+          <p><strong>Payment:</strong> ${escapeHtml(sale.payment_type)}</p>
+        </div>
+      </div>
+      <table class="tally-items">
+        <thead>
+          <tr><th>Sl</th><th>Particulars</th><th>Qty</th><th>Rate</th><th>GST %</th><th class="text-end">Amount</th></tr>
+        </thead>
+        <tbody>
+          ${items.map((item, index) => `
+            <tr>
+              <td>${index + 1}</td>
+              <td>${escapeHtml(item.product_name)}</td>
+              <td>${escapeHtml(formatQuantity(item.quantity, item.sale_unit || 'Piece'))}</td>
+              <td>${money(item.price)}</td>
+              <td>${Number(item.gst_percent || 0).toFixed(2)}</td>
+              <td class="text-end">${money(item.line_total)}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+      <div class="tally-summary-row">
+        <div class="tally-amount-words">
+          <strong>Amount Chargeable:</strong>
+          <p>${escapeHtml(amountInWords(total))}</p>
+        </div>
+        <table class="tally-totals">
+          <tr><td>Subtotal</td><td>${money(subtotal)}</td></tr>
+          <tr><td>Discount</td><td>${money(discount)}</td></tr>
+          <tr><td>GST</td><td>${money(gst)}</td></tr>
+          <tr class="grand"><td>Grand Total</td><td>${money(total)}</td></tr>
+        </table>
+      </div>
+      <div class="tally-footer-row">
+        <div>${escapeHtml(settings.receipt_footer || settings.footer_text || 'Thank you.')}</div>
+        <div class="tally-signature">Authorised Signatory</div>
+      </div>
+    </div>
+  `;
+};
+
+const amountInWords = (value) => {
+  const rounded = Math.round(Number(value || 0));
+  if (!rounded) return 'Rupees Zero Only';
+  const ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
+  const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+  const underHundred = n => n < 20 ? ones[n] : `${tens[Math.floor(n / 10)]} ${ones[n % 10]}`.trim();
+  const underThousand = n => `${n >= 100 ? `${ones[Math.floor(n / 100)]} Hundred ` : ''}${n % 100 ? underHundred(n % 100) : ''}`.trim();
+  const parts = [
+    [10000000, 'Crore'],
+    [100000, 'Lakh'],
+    [1000, 'Thousand']
+  ];
+  let remaining = rounded;
+  const words = [];
+  for (const [factor, label] of parts) {
+    const count = Math.floor(remaining / factor);
+    if (count) {
+      words.push(`${underThousand(count)} ${label}`);
+      remaining %= factor;
+    }
+  }
+  if (remaining) words.push(underThousand(remaining));
+  return `Rupees ${words.join(' ')} Only`;
 };
 
 const sendSaleOnWhatsApp = async (sale) => {
@@ -150,7 +251,7 @@ const saleWhatsAppUrl = async (sale, items) => {
     `Discount: ${money(sale.discount)}`,
     `Total: ${money(sale.grand_total)}`,
     '',
-    settings.footer_text || 'Thank you.'
+    settings.receipt_footer || settings.footer_text || 'Thank you.'
   ].filter(Boolean).join('\n'));
   return phone ? `https://wa.me/${phone}?text=${message}` : `https://wa.me/?text=${message}`;
 };

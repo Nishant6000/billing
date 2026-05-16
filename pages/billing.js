@@ -627,7 +627,7 @@ const receiptMessage = (settings, invoice, items, totals, customer = {}) => {
     `Discount: ${money(totals.discount)}`,
     `Total: ${money(totals.grandTotal)}`,
     '',
-    settings.footer_text || 'Thank you.'
+    settings.receipt_footer || settings.footer_text || 'Thank you.'
   ].filter(Boolean).join('\n');
 };
 
@@ -640,15 +640,16 @@ const printReceipt = async (invoice, items, totals, customer = {}) => {
   showModal(`
     <div class="modal-header"><h5 class="modal-title">Receipt</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
     <div class="modal-body">
-      <div class="receipt-preview print-area">
-        <h5 class="text-center">${escapeHtml(settings.shop_name)}</h5>
+      <div class="receipt-preview print-area receipt-theme-${escapeHtml(settings.printer_theme || 'thermal')}">
+        ${settings.receipt_logo ? `<img class="receipt-logo" src="${escapeHtml(settings.receipt_logo)}" alt="Receipt logo">` : ''}
+        <h5 class="text-center">${escapeHtml(settings.receipt_header || settings.shop_name)}</h5>
         <p class="text-center small">${escapeHtml(settings.shop_address)}<br>GSTIN: ${escapeHtml(settings.gstin)}<br>${escapeHtml(settings.phone)}</p>
         <p>Invoice: ${invoice}<br>Date: ${new Date().toLocaleString()}${customer.customerName ? `<br>Customer: ${escapeHtml(customer.customerName)}` : ''}${customer.customerPhone ? `<br>Mobile: ${escapeHtml(customer.customerPhone)}` : ''}</p>
         <table class="table table-sm"><tbody>${lines}</tbody></table>
         <p>GST: ${money(totals.gstTotal)}<br>Discount: ${money(totals.discount)}</p>
         <h5>Total: ${money(totals.grandTotal)}</h5>
         <div class="border p-3 text-center my-2">QR AREA</div>
-        <p class="text-center">${escapeHtml(settings.footer_text)}</p>
+        <p class="text-center">${escapeHtml(settings.receipt_footer || settings.footer_text)}</p>
       </div>
     </div>
     <div class="modal-footer">

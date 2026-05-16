@@ -23,6 +23,7 @@ const updateDbStatus = (mode) => {
 const updateShopNameLabel = async () => {
   const settings = await db.getSettings();
   $('#shop-name-label').textContent = settings.shop_name || 'Ginsoft POS Store';
+  localStorage.setItem('pos-billing-mode', settings.billing_mode || 'direct');
 };
 
 const updateUserLabel = () => {
@@ -174,3 +175,4 @@ try {
 
 window.POS.updateShopNameLabel = updateShopNameLabel;
 window.POS.updateUserLabel = updateUserLabel;
+window.POS.renderNav = renderNav;

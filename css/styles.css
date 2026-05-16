@@ -624,6 +624,56 @@ body {
   0%, 100% { transform: translateY(-90px); opacity: .55; }
   50% { transform: translateY(90px); opacity: 1; }
 }
+.demo-barcode-card {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  padding: 26px 18px;
+  border: 1px solid rgba(37, 99, 235, .14);
+  border-radius: 20px;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.96), rgba(248,250,252,.94)),
+    radial-gradient(circle at top left, rgba(37, 99, 235, .12), transparent 18rem);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.9), 0 18px 42px rgba(15, 23, 42, .08);
+  cursor: pointer;
+  overflow: hidden;
+}
+.demo-barcode-card:focus-within,
+.demo-barcode-card:focus {
+  outline: 3px solid rgba(37, 99, 235, .22);
+  outline-offset: 3px;
+}
+.scanner-capture-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+.demo-barcode {
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  gap: 4px;
+  width: min(320px, 100%);
+  height: 110px;
+  padding: 16px 18px 10px;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, .08);
+}
+.demo-barcode span {
+  display: block;
+  width: calc(var(--w) * 4px);
+  border-radius: 2px;
+  background: linear-gradient(180deg, #111827, #334155);
+}
+.demo-barcode-number {
+  color: #334155;
+  font-weight: 900;
+  letter-spacing: .14em;
+}
 .empty-state {
   display: grid;
   place-items: center;
@@ -641,11 +691,217 @@ body {
   font-family: "Courier New", monospace;
   border: 1px dashed #94a3b8;
 }
+.receipt-theme-desktop {
+  max-width: 720px;
+  padding: 28px;
+  border: 1px solid #cbd5e1;
+  border-radius: 12px;
+  box-shadow: 0 18px 42px rgba(15, 23, 42, .08);
+}
+.receipt-theme-thermal {
+  max-width: 360px;
+  font-size: .9rem;
+  border-radius: 0;
+}
+.receipt-logo {
+  display: block;
+  max-width: 96px;
+  max-height: 72px;
+  object-fit: contain;
+  margin: 0 auto 8px;
+}
+.receipt-logo-placeholder {
+  display: grid;
+  place-items: center;
+  width: 74px;
+  height: 58px;
+  margin: 0 auto 8px;
+  border: 1px dashed #94a3b8;
+  border-radius: 12px;
+  color: #64748b;
+  background: #f8fafc;
+}
+.receipt-header-block {
+  border-bottom: 1px dashed #cbd5e1;
+  margin-bottom: 10px;
+  padding-bottom: 10px;
+}
+.tally-invoice {
+  max-width: 794px;
+  min-height: 1040px;
+  padding: 0;
+  border: 1px solid #111827;
+  border-radius: 0;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 12px;
+  box-shadow: none;
+}
+.tally-title {
+  padding: 8px 12px;
+  border-bottom: 1px solid #111827;
+  text-align: center;
+  text-transform: uppercase;
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: .04em;
+}
+.tally-shop-row {
+  display: grid;
+  grid-template-columns: 110px 1fr;
+  min-height: 110px;
+  border-bottom: 1px solid #111827;
+}
+.tally-logo-cell {
+  display: grid;
+  place-items: center;
+  border-right: 1px solid #111827;
+  padding: 10px;
+}
+.tally-shop-details {
+  padding: 12px 14px;
+  text-align: center;
+}
+.tally-shop-details h4 {
+  margin: 0 0 6px;
+  font-size: 20px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+.tally-shop-details p { margin: 2px 0; }
+.tally-info-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  border-bottom: 1px solid #111827;
+}
+.tally-info-grid > div {
+  min-height: 96px;
+  padding: 10px 12px;
+}
+.tally-info-grid > div:first-child { border-right: 1px solid #111827; }
+.tally-info-grid p { margin: 3px 0; }
+.tally-items {
+  width: 100%;
+  border-collapse: collapse;
+}
+.tally-items th,
+.tally-items td {
+  padding: 8px 8px;
+  border-right: 1px solid #111827;
+  border-bottom: 1px solid #cbd5e1;
+  vertical-align: top;
+}
+.tally-items th {
+  border-bottom: 1px solid #111827;
+  background: #f8fafc;
+  font-weight: 800;
+}
+.tally-items th:last-child,
+.tally-items td:last-child { border-right: 0; }
+.tally-summary-row {
+  display: grid;
+  grid-template-columns: 1fr 280px;
+  border-top: 1px solid #111827;
+  border-bottom: 1px solid #111827;
+}
+.tally-amount-words {
+  padding: 10px 12px;
+  border-right: 1px solid #111827;
+}
+.tally-amount-words p { margin: 5px 0 0; font-weight: 700; }
+.tally-totals {
+  width: 100%;
+  border-collapse: collapse;
+}
+.tally-totals td {
+  padding: 7px 10px;
+  border-bottom: 1px solid #cbd5e1;
+}
+.tally-totals td:last-child {
+  text-align: right;
+  font-weight: 700;
+}
+.tally-totals .grand td {
+  border-bottom: 0;
+  font-size: 14px;
+  font-weight: 900;
+  background: #f8fafc;
+}
+.tally-footer-row {
+  display: grid;
+  grid-template-columns: 1fr 230px;
+  min-height: 92px;
+}
+.tally-footer-row > div {
+  padding: 12px;
+}
+.tally-signature {
+  display: grid;
+  align-items: end;
+  justify-items: center;
+  border-left: 1px solid #111827;
+  font-weight: 800;
+}
 
 @media print {
+  @page { size: A4; margin: 8mm; }
+  html,
+  body {
+    width: 100%;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #fff !important;
+  }
   body * { visibility: hidden; }
+  .modal,
+  .modal-dialog,
+  .modal-content,
+  .modal-body {
+    position: static !important;
+    display: block !important;
+    width: 100% !important;
+    max-width: none !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    transform: none !important;
+    box-shadow: none !important;
+    border: 0 !important;
+  }
+  .modal-header,
+  .modal-footer,
+  .modal-backdrop {
+    display: none !important;
+  }
   .print-area, .print-area * { visibility: visible; }
-  .print-area { position: absolute; inset: 0 auto auto 0; width: 80mm; }
+  .print-area {
+    position: fixed !important;
+    inset: 0 auto auto 0 !important;
+    width: 80mm;
+    box-sizing: border-box;
+    margin: 0 !important;
+  }
+  .receipt-theme-desktop.print-area {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-height: auto;
+    transform: none !important;
+  }
+  .receipt-theme-thermal.print-area { width: 80mm; }
+  .tally-invoice {
+    max-width: 100% !important;
+    border: 1px solid #000;
+    box-shadow: none;
+    overflow: hidden;
+  }
+  .tally-items {
+    table-layout: fixed;
+  }
+  .tally-items th,
+  .tally-items td {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
 }
 
 @media (max-width: 991px) {

@@ -95,7 +95,8 @@ export const renderSettings = async () => {
         <div class="col-md-4"><label class="form-label">Logo Upload</label><input class="form-control" name="logo" type="file" accept="image/*"></div>
         <div class="col-md-4"><label class="form-label">GST Settings</label><select class="form-select" name="gst_enabled"><option value="true">Enabled</option><option value="false" ${settings.gst_enabled === 'false' ? 'selected' : ''}>Disabled</option></select></div>
         <div class="col-md-4"><label class="form-label">Printer Paper</label><select class="form-select" name="paper_size"><option>80mm</option><option ${settings.paper_size === '58mm' ? 'selected' : ''}>58mm</option></select></div>
-        <div class="col-md-4"><label class="form-label">Theme</label><select class="form-select" name="theme"><option>Professional Light</option><option>Dark POS</option></select></div>
+        <div class="col-md-4"><label class="form-label">App Theme</label><select class="form-select" name="theme"><option>Professional Light</option><option>Dark POS</option></select></div>
+        <div class="col-md-4"><label class="form-label">Printer Theme</label><select class="form-select" name="printer_theme"><option value="thermal" ${settings.printer_theme !== 'desktop' ? 'selected' : ''}>Thermal Printer Theme</option><option value="desktop" ${settings.printer_theme === 'desktop' ? 'selected' : ''}>Desktop Printer Theme</option></select></div>
         <div class="col-md-4"><label class="form-label">Billing Mode</label><select class="form-select" name="billing_mode"><option value="direct">Direct Billing</option><option value="table" ${settings.billing_mode === 'table' ? 'selected' : ''}>Table Based Billing</option></select></div>
         <div class="col-md-4"><label class="form-label">Weight Billing</label><select class="form-select" name="weight_enabled"><option value="false">Disabled</option><option value="true" ${settings.weight_enabled === 'true' ? 'selected' : ''}>Enabled</option></select></div>
         <div class="col-12"><label class="form-label">Footer text</label><input class="form-control" name="footer_text" value="${escapeHtml(settings.footer_text || '')}"></div>
@@ -136,8 +137,10 @@ export const renderSettings = async () => {
     for (const [key, value] of form.entries()) {
       if (value instanceof File) continue;
       await db.saveSetting(key, value);
+      if (key === 'billing_mode') localStorage.setItem('pos-billing-mode', value);
     }
     await window.POS?.updateShopNameLabel?.();
+    window.POS?.renderNav?.();
     toast('Settings saved');
   });
 
