@@ -1,6 +1,6 @@
 export const APP_CONFIG = {
   dbName: 'offline_pos_db',
-  dbVersion: 7,
+  dbVersion: 8,
   currency: '₹',
   invoicePrefix: 'INV',
   routes: [
@@ -41,6 +41,7 @@ export const APP_CONFIG = {
     gst_enabled: 'true',
     bill_prefix: 'INV',
     billing_mode: 'direct',
-    weight_enabled: 'false'
+    weight_enabled: 'false',
+    language: 'en'
   }
 };

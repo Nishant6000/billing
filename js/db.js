@@ -194,6 +194,9 @@ class POSDatabase {
   async ensureProductColumns() {
     const columns = await this.query('PRAGMA table_info(products)');
     const names = columns.map(column => column.name);
+    for (const language of ['hi', 'ta', 'te', 'mr', 'ml', 'kn']) {
+      if (!names.includes(`product_name_${language}`)) await this.run(`ALTER TABLE products ADD COLUMN product_name_${language} TEXT`);
+    }
     if (!names.includes('shelf_no')) await this.run('ALTER TABLE products ADD COLUMN shelf_no TEXT');
     if (!names.includes('box_no')) await this.run('ALTER TABLE products ADD COLUMN box_no TEXT');
     if (!names.includes('description')) await this.run('ALTER TABLE products ADD COLUMN description TEXT');
@@ -521,13 +524,20 @@ class POSDatabase {
       return await this.query(`
         SELECT p.*, c.category_name FROM products p
         LEFT JOIN categories c ON c.id = p.category_id
-        WHERE LOWER(p.product_name) LIKE ? OR LOWER(IFNULL(p.barcode, '')) LIKE ?
+        WHERE LOWER(p.product_name) LIKE ?
+          OR LOWER(IFNULL(p.product_name_hi, '')) LIKE ?
+          OR LOWER(IFNULL(p.product_name_ta, '')) LIKE ?
+          OR LOWER(IFNULL(p.product_name_te, '')) LIKE ?
+          OR LOWER(IFNULL(p.product_name_mr, '')) LIKE ?
+          OR LOWER(IFNULL(p.product_name_ml, '')) LIKE ?
+          OR LOWER(IFNULL(p.product_name_kn, '')) LIKE ?
+          OR LOWER(IFNULL(p.barcode, '')) LIKE ?
         ORDER BY p.product_name
-      `, [`%${search.toLowerCase()}%`, `%${search.toLowerCase()}%`]);
+      `, Array(8).fill(`%${search.toLowerCase()}%`));
     }
     const categories = await this.getCategories();
     return (await this.fallback.all('products'))
-      .filter(p => `${p.product_name} ${p.barcode}`.toLowerCase().includes(search.toLowerCase()))
+      .filter(p => `${p.product_name} ${p.product_name_hi || ''} ${p.product_name_ta || ''} ${p.product_name_te || ''} ${p.product_name_mr || ''} ${p.product_name_ml || ''} ${p.product_name_kn || ''} ${p.barcode}`.toLowerCase().includes(search.toLowerCase()))
       .map(p => ({ ...p, category_name: categories.find(c => Number(c.id) === Number(p.category_id))?.category_name || '' }))
       .sort((a, b) => a.product_name.localeCompare(b.product_name));
   }
@@ -537,13 +547,13 @@ class POSDatabase {
     if (this.mode === 'sqlite') {
       if (row.id) {
         return await this.run(`
-          UPDATE products SET category_id=?, product_name=?, barcode=?, selling_price=?, base_quantity=?, base_unit=?, package_units_json=?, product_discount_type=?, product_discount_value=?, gst_percent=?, stock=?, shelf_no=?, box_no=?, description=?, billing_display=?, image=? WHERE id=?
-        `, [row.category_id, row.product_name, row.barcode, row.selling_price, row.base_quantity || 1, row.base_unit || 'Piece', row.package_units_json || '', row.product_discount_type || 'none', row.product_discount_value || 0, row.gst_percent, row.stock, row.shelf_no || '', row.box_no || '', row.description || '', row.billing_display || 'stock', row.image, row.id]);
+          UPDATE products SET category_id=?, product_name=?, product_name_hi=?, product_name_ta=?, product_name_te=?, product_name_mr=?, product_name_ml=?, product_name_kn=?, barcode=?, selling_price=?, base_quantity=?, base_unit=?, package_units_json=?, product_discount_type=?, product_discount_value=?, gst_percent=?, stock=?, shelf_no=?, box_no=?, description=?, billing_display=?, image=? WHERE id=?
+        `, [row.category_id, row.product_name, row.product_name_hi || '', row.product_name_ta || '', row.product_name_te || '', row.product_name_mr || '', row.product_name_ml || '', row.product_name_kn || '', row.barcode, row.selling_price, row.base_quantity || 1, row.base_unit || 'Piece', row.package_units_json || '', row.product_discount_type || 'none', row.product_discount_value || 0, row.gst_percent, row.stock, row.shelf_no || '', row.box_no || '', row.description || '', row.billing_display || 'stock', row.image, row.id]);
       }
       return await this.run(`
-        INSERT INTO products(category_id, product_name, barcode, selling_price, base_quantity, base_unit, package_units_json, product_discount_type, product_discount_value, gst_percent, stock, shelf_no, box_no, description, billing_display, image, created_at)
-        VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `, [row.category_id, row.product_name, row.barcode, row.selling_price, row.base_quantity || 1, row.base_unit || 'Piece', row.package_units_json || '', row.product_discount_type || 'none', row.product_discount_value || 0, row.gst_percent, row.stock, row.shelf_no || '', row.box_no || '', row.description || '', row.billing_display || 'stock', row.image, row.created_at]);
+        INSERT INTO products(category_id, product_name, product_name_hi, product_name_ta, product_name_te, product_name_mr, product_name_ml, product_name_kn, barcode, selling_price, base_quantity, base_unit, package_units_json, product_discount_type, product_discount_value, gst_percent, stock, shelf_no, box_no, description, billing_display, image, created_at)
+        VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [row.category_id, row.product_name, row.product_name_hi || '', row.product_name_ta || '', row.product_name_te || '', row.product_name_mr || '', row.product_name_ml || '', row.product_name_kn || '', row.barcode, row.selling_price, row.base_quantity || 1, row.base_unit || 'Piece', row.package_units_json || '', row.product_discount_type || 'none', row.product_discount_value || 0, row.gst_percent, row.stock, row.shelf_no || '', row.box_no || '', row.description || '', row.billing_display || 'stock', row.image, row.created_at]);
     }
     return await this.fallback.put('products', row);
   }
@@ -731,14 +741,49 @@ class POSDatabase {
     if (!order) return;
     if (this.mode === 'sqlite') {
       await this.run("UPDATE table_orders SET status='closed', updated_at=? WHERE id=?", [todayISO(), orderId]);
-      if (order.table_id) await this.run("UPDATE dining_tables SET status='available' WHERE id=?", [order.table_id]);
+      if (order.table_id) await this.releaseTableIfNoOpenOrders(order.table_id);
       return;
     }
     await this.fallback.put('table_orders', { ...order, status: 'closed', updated_at: todayISO() });
     if (order.table_id) {
-      const table = (await this.fallback.all('dining_tables')).find(row => Number(row.id) === Number(order.table_id));
-      if (table) await this.fallback.put('dining_tables', { ...table, status: 'available' });
+      await this.releaseTableIfNoOpenOrders(order.table_id);
     }
+  }
+
+  async closeTableOrdersForContext({ tableId = null, orderType = 'table' } = {}) {
+    const now = todayISO();
+    const openOrders = await this.getOpenTableOrders();
+    const matchingOrders = openOrders.filter(order => orderType === 'table'
+      ? Number(order.table_id) === Number(tableId)
+      : order.order_type === orderType && !order.table_id);
+    if (!matchingOrders.length) return;
+
+    if (this.mode === 'sqlite') {
+      if (orderType === 'table') {
+        await this.run("UPDATE table_orders SET status='closed', updated_at=? WHERE status='open' AND table_id=?", [now, tableId]);
+        await this.releaseTableIfNoOpenOrders(tableId);
+      } else {
+        await this.run("UPDATE table_orders SET status='closed', updated_at=? WHERE status='open' AND order_type=? AND table_id IS NULL", [now, orderType]);
+      }
+      return;
+    }
+
+    for (const order of matchingOrders) {
+      await this.fallback.put('table_orders', { ...order, status: 'closed', updated_at: now });
+    }
+    if (orderType === 'table') await this.releaseTableIfNoOpenOrders(tableId);
+  }
+
+  async releaseTableIfNoOpenOrders(tableId) {
+    if (!tableId) return;
+    const hasOpenOrder = (await this.getOpenTableOrders()).some(order => Number(order.table_id) === Number(tableId));
+    if (hasOpenOrder) return;
+    if (this.mode === 'sqlite') {
+      await this.run("UPDATE dining_tables SET status='available' WHERE id=?", [tableId]);
+      return;
+    }
+    const table = (await this.fallback.all('dining_tables')).find(row => Number(row.id) === Number(tableId));
+    if (table) await this.fallback.put('dining_tables', { ...table, status: 'available' });
   }
 
   actorFromUser(user = {}) {

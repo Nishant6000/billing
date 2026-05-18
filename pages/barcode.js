@@ -1,6 +1,7 @@
 import { db } from '../js/db.js';
 import { $ } from '../js/utils.js';
 import { toast } from '../js/ui.js';
+import { t } from '../js/i18n.js';
 
 let cameraStream = null;
 let scanTimer = null;
@@ -21,27 +22,27 @@ export const renderBarcode = async () => {
       <div class="col-xl-6">
         <div class="pos-card h-100">
           <div class="d-flex justify-content-between align-items-center gap-2 mb-3">
-            <h2 class="section-title mb-0">Barcode Camera</h2>
-            <span class="badge-soft"><i class="fa-solid fa-camera me-1"></i> Mobile</span>
+            <h2 class="section-title mb-0">${t('barcodeCamera')}</h2>
+            <span class="badge-soft"><i class="fa-solid fa-camera me-1"></i> ${t('mobile')}</span>
           </div>
           <div class="barcode-camera-frame">
             <video id="barcode-video" muted playsinline></video>
             <div class="barcode-scan-line"></div>
           </div>
           <div class="d-grid d-sm-flex gap-2 mt-3">
-            <button class="btn btn-primary-gradient flex-fill" id="start-camera"><i class="fa-solid fa-camera"></i> Enable Camera</button>
-            <button class="btn btn-outline-danger flex-fill" id="stop-camera"><i class="fa-solid fa-stop"></i> Stop Camera</button>
+            <button class="btn btn-primary-gradient flex-fill" id="start-camera"><i class="fa-solid fa-camera"></i> ${t('enableCamera')}</button>
+            <button class="btn btn-outline-danger flex-fill" id="stop-camera"><i class="fa-solid fa-stop"></i> ${t('stopCamera')}</button>
           </div>
-          <div class="alert alert-info mt-3 mb-0" id="camera-status">Enable camera and point at a barcode.</div>
+          <div class="alert alert-info mt-3 mb-0" id="camera-status">${t('enableCameraPointBarcode')}</div>
         </div>
       </div>
       <div class="col-xl-6">
         <div class="pos-card mb-3">
           <div class="d-flex justify-content-between align-items-center gap-2 mb-3">
-            <h2 class="section-title mb-0">Bluetooth Scanner</h2>
-            <span class="badge-soft"><i class="fa-solid fa-keyboard me-1"></i> Test</span>
+            <h2 class="section-title mb-0">${t('bluetoothScanner')}</h2>
+            <span class="badge-soft"><i class="fa-solid fa-keyboard me-1"></i> ${t('test')}</span>
           </div>
-          <div class="demo-barcode-card" id="bluetooth-scan-zone" tabindex="0" role="button" aria-label="Bluetooth barcode scanner">
+          <div class="demo-barcode-card" id="bluetooth-scan-zone" tabindex="0" role="button" aria-label="${t('bluetoothBarcodeScanner')}">
             <input class="scanner-capture-input" id="bluetooth-scan-input" autocomplete="off">
             <div class="demo-barcode">
               <span style="--w:3"></span><span style="--w:1"></span><span style="--w:2"></span><span style="--w:4"></span>
@@ -51,23 +52,23 @@ export const renderBarcode = async () => {
             </div>
             <div class="demo-barcode-number">8901 0000 0001</div>
           </div>
-          <div class="small text-muted mt-2">Last scan: <strong id="last-scan">None</strong></div>
+          <div class="small text-muted mt-2">${t('lastScan')}: <strong id="last-scan">${t('none')}</strong></div>
         </div>
 
         <form class="pos-card" id="barcode-settings-form">
-          <h2 class="section-title">Barcode Settings</h2>
-          <label class="form-label">Scanner Mode</label>
+          <h2 class="section-title">${t('barcodeSettings')}</h2>
+          <label class="form-label">${t('scannerMode')}</label>
           <select class="form-select mb-3" name="barcode_mode">
-            <option value="both" ${settings.barcode_mode === 'both' ? 'selected' : ''}>Both</option>
-            <option value="bluetooth" ${settings.barcode_mode === 'bluetooth' ? 'selected' : ''}>Bluetooth Only</option>
-            <option value="camera" ${settings.barcode_mode === 'camera' ? 'selected' : ''}>Camera Only</option>
+            <option value="both" ${settings.barcode_mode === 'both' ? 'selected' : ''}>${t('both')}</option>
+            <option value="bluetooth" ${settings.barcode_mode === 'bluetooth' ? 'selected' : ''}>${t('bluetoothOnly')}</option>
+            <option value="camera" ${settings.barcode_mode === 'camera' ? 'selected' : ''}>${t('cameraOnly')}</option>
           </select>
-          <div class="form-check form-switch mb-2"><input class="form-check-input" type="checkbox" name="barcode_auto_add" id="barcode_auto_add" ${settings.barcode_auto_add === 'true' ? 'checked' : ''}><label class="form-check-label" for="barcode_auto_add">Auto-add scanned product to Billing</label></div>
-          <div class="form-check form-switch mb-2"><input class="form-check-input" type="checkbox" name="barcode_beep" id="barcode_beep" ${settings.barcode_beep === 'true' ? 'checked' : ''}><label class="form-check-label" for="barcode_beep">Beep after scan</label></div>
-          <div class="form-check form-switch mb-3"><input class="form-check-input" type="checkbox" name="barcode_vibration" id="barcode_vibration" ${settings.barcode_vibration === 'true' ? 'checked' : ''}><label class="form-check-label" for="barcode_vibration">Vibrate after scan</label></div>
-          <label class="form-label">Scan Delay (ms)</label>
+          <div class="form-check form-switch mb-2"><input class="form-check-input" type="checkbox" name="barcode_auto_add" id="barcode_auto_add" ${settings.barcode_auto_add === 'true' ? 'checked' : ''}><label class="form-check-label" for="barcode_auto_add">${t('autoAddScannedProduct')}</label></div>
+          <div class="form-check form-switch mb-2"><input class="form-check-input" type="checkbox" name="barcode_beep" id="barcode_beep" ${settings.barcode_beep === 'true' ? 'checked' : ''}><label class="form-check-label" for="barcode_beep">${t('beepAfterScan')}</label></div>
+          <div class="form-check form-switch mb-3"><input class="form-check-input" type="checkbox" name="barcode_vibration" id="barcode_vibration" ${settings.barcode_vibration === 'true' ? 'checked' : ''}><label class="form-check-label" for="barcode_vibration">${t('vibrateAfterScan')}</label></div>
+          <label class="form-label">${t('scanDelayMs')}</label>
           <input class="form-control" name="barcode_delay" type="number" min="200" step="50" value="${settings.barcode_delay}">
-          <button class="btn btn-primary-gradient mt-3"><i class="fa-solid fa-floppy-disk"></i> Save Settings</button>
+          <button class="btn btn-primary-gradient mt-3"><i class="fa-solid fa-floppy-disk"></i> ${t('saveSettings')}</button>
         </form>
       </div>
     </div>
@@ -86,7 +87,7 @@ const bindBarcodeEvents = () => {
     event.preventDefault();
     const code = event.currentTarget.value.trim();
     event.currentTarget.value = '';
-    $('#last-scan').textContent = code || 'None';
+    $('#last-scan').textContent = code || t('none');
     handleBarcode(code);
   });
   $('#barcode-settings-form').addEventListener('submit', saveBarcodeSettings);
@@ -95,7 +96,7 @@ const bindBarcodeEvents = () => {
 const startCamera = async () => {
   if (!('BarcodeDetector' in window)) {
     $('#camera-status').className = 'alert alert-warning mt-3 mb-0';
-    $('#camera-status').textContent = 'Camera barcode scanning is not supported in this browser. Use Bluetooth/manual scanner input.';
+    $('#camera-status').textContent = t('cameraScannerNotSupported');
     return;
   }
   detector = detector || new BarcodeDetector({ formats: ['ean_13', 'ean_8', 'code_128', 'code_39', 'upc_a', 'upc_e', 'qr_code'] });
@@ -104,7 +105,7 @@ const startCamera = async () => {
   video.srcObject = cameraStream;
   await video.play();
   $('#camera-status').className = 'alert alert-success mt-3 mb-0';
-  $('#camera-status').textContent = 'Camera scanner started. Point at a barcode.';
+  $('#camera-status').textContent = t('cameraScannerStarted');
   scanCameraLoop();
 };
 
@@ -130,11 +131,11 @@ const stopCamera = () => {
   const video = $('#barcode-video');
   if (video) video.srcObject = null;
   $('#camera-status').className = 'alert alert-info mt-3 mb-0';
-  $('#camera-status').textContent = 'Camera stopped.';
+  $('#camera-status').textContent = t('cameraStopped');
 };
 
 const handleBarcode = async (code) => {
-  if (!code) return toast('Enter or scan a barcode', 'warning');
+  if (!code) return toast(t('enterOrScanBarcode'), 'warning');
   const settings = { ...settingDefaults, ...(await db.getSettings()) };
   if (settings.barcode_beep === 'true') beep();
   if (settings.barcode_vibration === 'true' && navigator.vibrate) navigator.vibrate(80);
@@ -142,12 +143,12 @@ const handleBarcode = async (code) => {
   const product = products.find(item => String(item.barcode || '') === String(code)) || products[0];
   if (product && settings.barcode_auto_add === 'true') {
     sessionStorage.setItem('pos-pending-barcode', code);
-    toast('Product found. Opening Billing.');
+    toast(t('productFoundOpeningBilling'));
     location.hash = '#/billing';
   } else if (product) {
-    toast(`Product found: ${product.product_name}`);
+    toast(`${t('productFound')}: ${product.product_name}`);
   } else {
-    toast(`No product found for barcode ${code}`, 'warning');
+    toast(`${t('noProductFoundForBarcode')} ${code}`, 'warning');
   }
 };
 
@@ -159,7 +160,7 @@ const saveBarcodeSettings = async (event) => {
   await db.saveSetting('barcode_beep', form.get('barcode_beep') ? 'true' : 'false');
   await db.saveSetting('barcode_vibration', form.get('barcode_vibration') ? 'true' : 'false');
   await db.saveSetting('barcode_delay', form.get('barcode_delay') || '600');
-  toast('Barcode settings saved');
+  toast(t('barcodeSettingsSaved'));
 };
 
 const beep = () => {

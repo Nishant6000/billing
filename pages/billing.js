@@ -2,6 +2,7 @@ import { db } from '../js/db.js';
 import { getCurrentUser } from '../js/auth.js';
 import { $, calculateCart, calculateCartLines, debounce, escapeHtml, formatBasePrice, formatPackingChain, formatQuantity, money, productDiscountAmount, saleUnitsForProduct } from '../js/utils.js';
 import { closeModal, showModal, toast } from '../js/ui.js';
+import { displayStatus, displayTableArea, displayTableName, localizedProductName, t } from '../js/i18n.js';
 
 let cart = [];
 let activeRestaurantContext = null;
@@ -48,7 +49,8 @@ const renderCart = () => {
     return `
     <div class="cart-line">
       <div>
-        <strong>${escapeHtml(item.product_name)}</strong>
+        <strong>${escapeHtml(localizedProductName(item))}</strong>
+        ${localizedProductName(item) !== item.product_name ? `<div class="text-muted small">${escapeHtml(item.product_name)}</div>` : ''}
         <div class="text-muted small">${formatBasePrice(item)} | GST ${item.gst_percent}%${productDiscountAmount(item) ? ` | Saved ${money(productDiscountAmount(item))}` : ''}</div>
         ${formatPackingChain(item) ? `<div class="text-muted small">${escapeHtml(formatPackingChain(item))}</div>` : ''}
         <div class="text-muted small">Selling ${formatQuantity(line.quantity, line.unit)} = ${money(line.taxable)}</div>
@@ -67,12 +69,12 @@ const renderCart = () => {
       </div>
     </div>
   `;
-  }).join('') : '<p class="text-muted text-center py-4">Cart is empty</p>';
+  }).join('') : `<p class="text-muted text-center py-4">${t('cartEmpty')}</p>`;
   $('#cart-totals').innerHTML = `
-    <div class="d-flex justify-content-between"><span>Subtotal</span><strong>${money(totals.subtotal)}</strong></div>
+    <div class="d-flex justify-content-between"><span>${t('subtotal')}</span><strong>${money(totals.subtotal)}</strong></div>
     <div class="d-flex justify-content-between"><span>GST</span><strong>${money(totals.gstTotal)}</strong></div>
-    <div class="d-flex justify-content-between"><span>Discount</span><strong>${money(totals.discount)}</strong></div>
-    <hr><div class="d-flex justify-content-between fs-4"><span>Total</span><strong>${money(totals.grandTotal)}</strong></div>
+    <div class="d-flex justify-content-between"><span>${t('discount')}</span><strong>${money(totals.discount)}</strong></div>
+    <hr><div class="d-flex justify-content-between fs-4"><span>${t('total')}</span><strong>${money(totals.grandTotal)}</strong></div>
   `;
 };
 
@@ -87,7 +89,7 @@ const renderProducts = async (search = '') => {
             : '<div class="product-photo-empty"><i class="fa-solid fa-image"></i></div>'}
         </div>
         <div class="d-flex justify-content-between gap-2">
-          <strong>${escapeHtml(product.product_name)}</strong>
+          <strong>${escapeHtml(localizedProductName(product))}</strong>
           <span class="d-inline-flex flex-column align-items-end gap-1">${productPriceMarkup(product)}</span>
         </div>
         <div class="billing-product-meta">
@@ -121,11 +123,11 @@ export const renderBilling = async () => {
           <div class="row g-2 align-items-center">
             <div class="col-lg-8">
               <div class="input-group input-group-lg">
-                <input class="form-control" id="billing-search" placeholder="Search product or scan barcode">
+                <input class="form-control" id="billing-search" placeholder="${t('searchProductScan')}">
                 <button class="btn btn-outline-primary" id="billing-camera-scan" title="Scan barcode with camera"><i class="fa-solid fa-camera"></i></button>
               </div>
             </div>
-            <div class="col-lg-4"><button class="btn btn-outline-secondary w-100 h-100" id="resume-bill"><i class="fa-solid fa-clock-rotate-left"></i> Resume Hold</button></div>
+            <div class="col-lg-4"><button class="btn btn-outline-secondary w-100 h-100" id="resume-bill"><i class="fa-solid fa-clock-rotate-left"></i> ${t('resumeHold')}</button></div>
           </div>
         </div>
         <div class="row g-3" id="billing-products"></div>
@@ -133,17 +135,17 @@ export const renderBilling = async () => {
       <div class="col-xl-4">
         <div class="pos-card cart-panel">
           <div class="d-flex justify-content-between align-items-center mb-2">
-            <h2 class="section-title mb-0">Current Bill</h2>
+            <h2 class="section-title mb-0">${t('currentBill')}</h2>
             <button class="btn btn-sm btn-outline-danger" id="clear-cart"><i class="fa-solid fa-xmark"></i></button>
           </div>
           <div id="cart-items"></div>
-          <label class="form-label mt-3">Discount</label>
+          <label class="form-label mt-3">${t('discount')}</label>
           <input class="form-control" id="discount" type="number" value="0" min="0">
           <div class="mt-3" id="cart-totals"></div>
           <div class="d-grid gap-2 mt-3">
-            ${settings.weight_enabled === 'true' ? '<button class="btn btn-outline-primary" id="capture-weight"><i class="fa-solid fa-scale-balanced"></i> Capture Weight</button>' : ''}
-            <button class="btn btn-primary-gradient btn-lg" id="pay-now"><i class="fa-solid fa-wallet"></i> Payment</button>
-            <button class="btn btn-outline-secondary" id="hold-bill"><i class="fa-solid fa-pause"></i> Hold Bill</button>
+            ${settings.weight_enabled === 'true' ? `<button class="btn btn-outline-primary" id="capture-weight"><i class="fa-solid fa-scale-balanced"></i> ${t('captureWeight')}</button>` : ''}
+            <button class="btn btn-primary-gradient btn-lg" id="pay-now"><i class="fa-solid fa-wallet"></i> ${t('payment')}</button>
+            <button class="btn btn-outline-secondary" id="hold-bill"><i class="fa-solid fa-pause"></i> ${t('holdBill')}</button>
           </div>
           <p class="text-muted small mt-3 mb-0">Shortcuts: Alt+N new bill, Enter from search adds first visible product.</p>
         </div>
@@ -243,11 +245,11 @@ const renderTableBilling = async () => {
   $('#view').innerHTML = `
     <div class="pos-card mb-3">
       <div class="d-flex flex-wrap gap-2 justify-content-between align-items-center">
-        <div><h2 class="section-title mb-1">Table Billing</h2><p class="text-muted mb-0">Open a table, add items, save KOT, and generate the final bill at checkout.</p></div>
+        <div><h2 class="section-title mb-1">${t('tableBillingTitle')}</h2><p class="text-muted mb-0">${t('tableBillingHelp')}</p></div>
         <div class="d-flex gap-2 flex-wrap">
-          <button class="btn btn-outline-primary" data-order-type="parcel"><i class="fa-solid fa-bag-shopping"></i> Parcel ${parcelOrder ? '<span class="badge bg-warning text-dark ms-1">Open</span>' : ''}</button>
-          <button class="btn btn-outline-primary" data-order-type="takeaway"><i class="fa-solid fa-person-walking-luggage"></i> Takeaway ${takeawayOrder ? '<span class="badge bg-warning text-dark ms-1">Open</span>' : ''}</button>
-          <a class="btn btn-primary-gradient" href="#/tables"><i class="fa-solid fa-chair"></i> Manage Tables</a>
+          <button class="btn btn-outline-primary" data-order-type="parcel"><i class="fa-solid fa-bag-shopping"></i> ${t('parcel')} ${parcelOrder ? '<span class="badge bg-warning text-dark ms-1">Open</span>' : ''}</button>
+          <button class="btn btn-outline-primary" data-order-type="takeaway"><i class="fa-solid fa-person-walking-luggage"></i> ${t('takeaway')} ${takeawayOrder ? '<span class="badge bg-warning text-dark ms-1">Open</span>' : ''}</button>
+          <a class="btn btn-primary-gradient" href="#/tables"><i class="fa-solid fa-chair"></i> ${t('manageTables')}</a>
         </div>
       </div>
     </div>
@@ -255,9 +257,9 @@ const renderTableBilling = async () => {
       ${tables.map(table => `
         <button class="table-card ${escapeHtml(table.status || 'available')}" data-table="${table.id}">
           <span class="table-card-icon"><i class="fa-solid fa-chair"></i></span>
-          <strong>${escapeHtml(table.table_name)}</strong>
-          <small>${escapeHtml(table.area || 'Dining')} | ${table.seats || 4} seats</small>
-          <span class="table-status ${escapeHtml(table.status || 'available')}">${escapeHtml(table.status || 'available')}</span>
+          <strong>${escapeHtml(displayTableName(table.table_name))}</strong>
+          <small>${escapeHtml(table.area ? displayTableArea(table.area) : t('dining'))} | ${table.seats || 4} ${t('seats')}</small>
+          <span class="table-status ${escapeHtml(table.status || 'available')}">${escapeHtml(displayStatus(table.status || 'available'))}</span>
         </button>
       `).join('')}
     </div>
@@ -267,7 +269,7 @@ const renderTableBilling = async () => {
     const orderType = event.target.closest('[data-order-type]')?.dataset.orderType;
     if (tableId) {
       const table = tables.find(row => Number(row.id) === Number(tableId));
-      return await openRestaurantOrder({ tableId: Number(tableId), orderType: 'table', label: table?.table_name || 'Table' });
+      return await openRestaurantOrder({ tableId: Number(tableId), orderType: 'table', label: displayTableName(table?.table_name || t('table')) });
     }
     if (orderType) return await openRestaurantOrder({ tableId: null, orderType, label: orderType === 'parcel' ? 'Parcel' : 'Takeaway' });
   });
@@ -285,10 +287,10 @@ const openRestaurantOrder = async (context) => {
         <div class="pos-card mb-3">
           <div class="d-flex flex-wrap gap-2 justify-content-between align-items-center mb-3">
             <div><h2 class="section-title mb-1">${escapeHtml(context.label)} Order</h2><p class="text-muted mb-0">${order ? `Running order ${escapeHtml(order.order_no)}` : 'New running order'}</p></div>
-            <button class="btn btn-outline-secondary" id="back-to-tables"><i class="fa-solid fa-arrow-left"></i> Tables</button>
+            <button class="btn btn-outline-secondary" id="back-to-tables"><i class="fa-solid fa-arrow-left"></i> ${t('backToTables')}</button>
           </div>
           <div class="input-group input-group-lg">
-            <input class="form-control" id="billing-search" placeholder="Search item or scan barcode">
+            <input class="form-control" id="billing-search" placeholder="${t('searchProductScan')}">
             <button class="btn btn-outline-primary" id="billing-camera-scan" title="Scan barcode with camera"><i class="fa-solid fa-camera"></i></button>
           </div>
         </div>
@@ -297,17 +299,17 @@ const openRestaurantOrder = async (context) => {
       <div class="col-xl-4">
         <div class="pos-card cart-panel">
           <div class="d-flex justify-content-between align-items-center mb-2">
-            <h2 class="section-title mb-0">Running Order</h2>
+            <h2 class="section-title mb-0">${t('currentOrder')}</h2>
             <button class="btn btn-sm btn-outline-danger" id="clear-cart"><i class="fa-solid fa-xmark"></i></button>
           </div>
           <div id="cart-items"></div>
-          <label class="form-label mt-3">Discount</label>
+          <label class="form-label mt-3">${t('discount')}</label>
           <input class="form-control" id="discount" type="number" value="0" min="0">
           <div class="mt-3" id="cart-totals"></div>
           <div class="d-grid gap-2 mt-3">
-            <button class="btn btn-outline-primary" id="save-table-order"><i class="fa-solid fa-floppy-disk"></i> Save Order</button>
-            <button class="btn btn-outline-secondary" id="print-kot"><i class="fa-solid fa-kitchen-set"></i> Print KOT</button>
-            <button class="btn btn-primary-gradient btn-lg" id="pay-now"><i class="fa-solid fa-receipt"></i> Generate Bill</button>
+            <button class="btn btn-outline-primary" id="save-table-order"><i class="fa-solid fa-floppy-disk"></i> ${t('saveOrder')}</button>
+            <button class="btn btn-outline-secondary" id="print-kot"><i class="fa-solid fa-kitchen-set"></i> ${t('printKot')}</button>
+            <button class="btn btn-primary-gradient btn-lg" id="pay-now"><i class="fa-solid fa-receipt"></i> ${t('generateBill')}</button>
           </div>
         </div>
       </div>
@@ -511,37 +513,37 @@ const addBarcodeToCurrentBill = async (code) => {
 };
 
 const openPayment = async (options = {}) => {
-  if (!cart.length) return toast('Cart is empty', 'warning');
+  if (!cart.length) return toast(t('cartEmpty'), 'warning');
   const totals = calculateCart(cart, Number($('#discount').value || 0));
   showModal(`
-    <div class="modal-header"><h5 class="modal-title">Payment</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-header"><h5 class="modal-title">${t('payment')}</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
     <div class="modal-body">
       <p class="text-muted mb-1">Amount Payable</p>
       <h3 class="fw-black mb-3">${money(totals.grandTotal)}</h3>
       <div class="row g-3 mb-2">
         <div class="col-md-6">
-          <label class="form-label">Customer Name</label>
-          <input class="form-control" id="customer-name" placeholder="Optional">
+          <label class="form-label">${t('customerName')}</label>
+          <input class="form-control" id="customer-name" placeholder="${t('optional')}">
         </div>
         <div class="col-md-6">
-          <label class="form-label">Mobile Number</label>
+          <label class="form-label">${t('mobileNumber')}</label>
           <input class="form-control" id="customer-phone" inputmode="tel" placeholder="WhatsApp number">
         </div>
       </div>
-      <label class="form-label">Payment method</label>
+      <label class="form-label">${t('paymentMethod')}</label>
       <select class="form-select" id="payment-type"><option>Cash</option><option>UPI</option><option>Card</option></select>
       <div id="cash-payment-fields" class="cash-payment-box mt-3">
-        <label class="form-label">Received Amount</label>
+        <label class="form-label">${t('receivedAmount')}</label>
         <input class="form-control form-control-lg" id="cash-received" type="number" min="0" step="0.01" value="${totals.grandTotal.toFixed(2)}">
         <div class="d-flex justify-content-between align-items-center mt-3">
-          <span class="text-muted">Balance to Give</span>
+          <span class="text-muted">${t('balanceToGive')}</span>
           <strong class="fs-4" id="cash-balance">${money(0)}</strong>
         </div>
       </div>
-      <label class="form-label mt-3">Reference number</label>
+      <label class="form-label mt-3">${t('referenceNumber')}</label>
       <input class="form-control" id="payment-ref" placeholder="Optional for UPI/Card">
     </div>
-    <div class="modal-footer"><button class="btn btn-light" data-bs-dismiss="modal">Cancel</button><button class="btn btn-primary-gradient" id="complete-sale">Complete Sale</button></div>
+    <div class="modal-footer"><button class="btn btn-light" data-bs-dismiss="modal">${t('cancel')}</button><button class="btn btn-primary-gradient" id="complete-sale">${t('completeSale')}</button></div>
   `);
 
   const updateCashFields = () => {
@@ -568,10 +570,7 @@ const openPayment = async (options = {}) => {
     const customerPhone = $('#customer-phone').value.trim();
     await db.saveSale({ invoice_no: invoice, items: cart, subtotal: totals.subtotal, discount: totals.discount, gstTotal: totals.gstTotal, grandTotal: totals.grandTotal, paymentType, referenceNo: $('#payment-ref').value, customerName, customerPhone, user: getCurrentUser() });
     if (options.closeRestaurantOrder && activeRestaurantContext) {
-      const order = activeRestaurantContext.orderType === 'table'
-        ? await db.getActiveTableOrder(activeRestaurantContext.tableId)
-        : await db.getActiveTableOrder(null, activeRestaurantContext.orderType);
-      if (order) await db.closeTableOrder(order.id);
+      await db.closeTableOrdersForContext(activeRestaurantContext);
     }
     const soldCart = [...cart];
     cart = [];

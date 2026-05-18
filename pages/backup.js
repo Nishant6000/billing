@@ -1,6 +1,7 @@
 import { db } from '../js/db.js';
 import { $, downloadFile, escapeHtml } from '../js/utils.js';
 import { toast } from '../js/ui.js';
+import { t } from '../js/i18n.js';
 
 let selectedBackup = null;
 
@@ -10,28 +11,28 @@ export const renderBackup = async () => {
       <div class="col-lg-6">
         <div class="pos-card h-100">
           <div class="metric-icon mb-3"><i class="fa-solid fa-download"></i></div>
-          <h2 class="section-title">Backup Database</h2>
-          <p class="text-muted">Download a complete local backup of products, sales, purchases, settings, held bills, and audit reports.</p>
-          <button class="btn btn-primary-gradient" id="download-backup"><i class="fa-solid fa-cloud-arrow-down"></i> Download Backup</button>
+          <h2 class="section-title">${t('backupDatabase')}</h2>
+          <p class="text-muted">${t('backupDatabaseHelp')}</p>
+          <button class="btn btn-primary-gradient" id="download-backup"><i class="fa-solid fa-cloud-arrow-down"></i> ${t('downloadBackup')}</button>
           <div class="mt-3 small text-muted" id="backup-status"></div>
         </div>
       </div>
       <div class="col-lg-6">
         <div class="pos-card h-100">
           <div class="metric-icon mb-3" style="background:linear-gradient(135deg,#f59e0b,#ef4444)"><i class="fa-solid fa-upload"></i></div>
-          <h2 class="section-title">Restore Database</h2>
-          <p class="text-muted">Upload a Ginsoft POS backup file. Restore replaces current local data with the backup data.</p>
+          <h2 class="section-title">${t('restoreDatabase')}</h2>
+          <p class="text-muted">${t('restoreDatabaseHelp')}</p>
           <input class="form-control" id="backup-file" type="file" accept="application/json,.json">
           <div class="mt-3" id="restore-preview"></div>
-          <button class="btn btn-outline-danger mt-3" id="restore-backup" disabled><i class="fa-solid fa-database"></i> Restore Backup</button>
+          <button class="btn btn-outline-danger mt-3" id="restore-backup" disabled><i class="fa-solid fa-database"></i> ${t('restoreBackup')}</button>
         </div>
       </div>
       <div class="col-12">
         <div class="pos-card">
-          <h2 class="section-title">Backup Contents</h2>
+          <h2 class="section-title">${t('backupContents')}</h2>
           <div class="table-responsive">
             <table class="table">
-              <thead><tr><th>Data</th><th>Description</th></tr></thead>
+              <thead><tr><th>${t('data')}</th><th>${t('description')}</th></tr></thead>
               <tbody>
                 <tr><td>Products & Categories</td><td>All product details, photos, pricing, GST, shelf/box, and discounts.</td></tr>
                 <tr><td>Sales & Payments</td><td>Bills, bill items, payment records, returns, modifications, deleted bill audit.</td></tr>

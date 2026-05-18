@@ -11,12 +11,17 @@
     "cap:open": "npx cap open android"
   },
   "dependencies": {
-    "@capacitor/android": "^7.0.0",
-    "@capacitor/core": "^7.0.0",
-    "@capacitor/cli": "^7.0.0",
     "@capacitor-community/sqlite": "^7.0.0",
-    "jeep-sqlite": "^2.8.0",
-    "http-server": "^14.1.1"
-  },
-  "devDependencies": {}
+    "@capacitor/android": "^7.0.0",
+    "@capacitor/cli": "^7.0.0",
+    "@capacitor/core": "^7.0.0",
+    "@fontsource/noto-sans": "^5.2.10",
+    "@fontsource/noto-sans-devanagari": "^5.2.8",
+    "@fontsource/noto-sans-kannada": "^5.2.9",
+    "@fontsource/noto-sans-malayalam": "^5.2.8",
+    "@fontsource/noto-sans-tamil": "^5.2.7",
+    "@fontsource/noto-sans-telugu": "^5.2.8",
+    "http-server": "^14.1.1",
+    "jeep-sqlite": "^2.8.0"
+  }
 }

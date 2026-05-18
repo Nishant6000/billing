@@ -1,6 +1,7 @@
 import { db } from '../js/db.js';
 import { $, calculateCart, dateOnly, downloadFile, escapeHtml, formatQuantity, money, toCSV } from '../js/utils.js';
 import { toast } from '../js/ui.js';
+import { t } from '../js/i18n.js';
 
 let reportChart;
 
@@ -8,36 +9,36 @@ export const renderReports = async () => {
   $('#view').innerHTML = `
     <div class="pos-card mb-3">
       <div class="d-flex flex-wrap gap-2 justify-content-between align-items-center">
-        <h2 class="section-title mb-0">Reports</h2>
+        <h2 class="section-title mb-0">${t('route.reports')}</h2>
         <div class="d-flex gap-2 flex-wrap">
           <select class="form-select" id="report-type">
-            <option value="sales">Sales Summary</option>
-            <option value="paid">Paid Bills</option>
-            <option value="unpaid">Saved Unpaid Bills</option>
-            <option value="deleted">Deleted Bills</option>
-            <option value="modified">Modified Bills</option>
-            <option value="returned">Returned Bills</option>
+            <option value="sales">${t('salesSummary')}</option>
+            <option value="paid">${t('paidBills')}</option>
+            <option value="unpaid">${t('savedUnpaidBills')}</option>
+            <option value="deleted">${t('deletedBills')}</option>
+            <option value="modified">${t('modifiedBills')}</option>
+            <option value="returned">${t('returnedBills')}</option>
           </select>
           <input class="form-control" id="report-from" type="date" value="${dateOnly()}">
           <input class="form-control" id="report-to" type="date" value="${dateOnly()}">
           <button class="btn btn-outline-primary" id="run-report"><i class="fa-solid fa-rotate"></i></button>
-          <button class="btn btn-outline-success" id="export-report"><i class="fa-solid fa-download"></i> Export CSV</button>
+          <button class="btn btn-outline-success" id="export-report"><i class="fa-solid fa-download"></i> ${t('exportCsv')}</button>
         </div>
       </div>
     </div>
     <div class="row g-3" id="sales-report-view">
-      <div class="col-lg-3"><div class="metric-card"><p>Daily Sales</p><h3 id="r-sales">₹0.00</h3></div></div>
-      <div class="col-lg-3"><div class="metric-card"><p>GST Report</p><h3 id="r-gst">₹0.00</h3></div></div>
-      <div class="col-lg-3"><div class="metric-card"><p>Cash</p><h3 id="r-cash">₹0.00</h3></div></div>
-      <div class="col-lg-3"><div class="metric-card"><p>UPI/Card</p><h3 id="r-digital">₹0.00</h3></div></div>
-      <div class="col-xl-7"><div class="pos-card"><h2 class="section-title">Payment Report</h2><canvas id="report-chart" height="150"></canvas></div></div>
-      <div class="col-xl-5"><div class="pos-card"><h2 class="section-title">Product Sales</h2><div class="table-responsive"><table class="table"><thead><tr><th>Product</th><th>Qty</th><th>Total</th></tr></thead><tbody id="product-report"></tbody></table></div></div></div>
+      <div class="col-lg-3"><div class="metric-card"><p>${t('dailySales')}</p><h3 id="r-sales">₹0.00</h3></div></div>
+      <div class="col-lg-3"><div class="metric-card"><p>${t('gstReport')}</p><h3 id="r-gst">₹0.00</h3></div></div>
+      <div class="col-lg-3"><div class="metric-card"><p>${t('cash')}</p><h3 id="r-cash">₹0.00</h3></div></div>
+      <div class="col-lg-3"><div class="metric-card"><p>${t('upiCard')}</p><h3 id="r-digital">₹0.00</h3></div></div>
+      <div class="col-xl-7"><div class="pos-card"><h2 class="section-title">${t('paymentReport')}</h2><canvas id="report-chart" height="150"></canvas></div></div>
+      <div class="col-xl-5"><div class="pos-card"><h2 class="section-title">${t('productSales')}</h2><div class="table-responsive"><table class="table"><thead><tr><th>${t('product')}</th><th>${t('qty')}</th><th>${t('total')}</th></tr></thead><tbody id="product-report"></tbody></table></div></div></div>
     </div>
     <div class="pos-card d-none" id="activity-report-view">
-      <h2 class="section-title" id="activity-title">Bill Activity</h2>
+      <h2 class="section-title" id="activity-title">${t('billActivity')}</h2>
       <div class="table-responsive">
         <table class="table">
-          <thead><tr><th>Invoice</th><th>Activity</th><th>User</th><th>Note</th><th>Bill Amount</th><th>Date</th></tr></thead>
+          <thead><tr><th>${t('invoice')}</th><th>${t('activity')}</th><th>${t('user')}</th><th>${t('note')}</th><th>${t('billAmount')}</th><th>${t('date')}</th></tr></thead>
           <tbody id="activity-report-body"></tbody>
         </table>
       </div>
@@ -50,7 +51,7 @@ export const renderReports = async () => {
     const type = $('#report-type').value;
     const rows = await exportRowsForType(type);
     downloadFile(`${type}-report.csv`, toCSV(rows));
-    toast('Report exported');
+    toast(t('reportExported'));
   });
 };
 
@@ -89,7 +90,7 @@ const runReport = async () => {
     reportChart?.destroy();
     reportChart = new Chart($('#report-chart'), {
       type: 'doughnut',
-      data: { labels: ['Cash', 'UPI/Card'], datasets: [{ data: [cash, digital], backgroundColor: ['#16a34a', '#2563eb'] }] },
+      data: { labels: [t('cash'), t('upiCard')], datasets: [{ data: [cash, digital], backgroundColor: ['#16a34a', '#2563eb'] }] },
       options: { plugins: { legend: { position: 'bottom' } } }
     });
   }
@@ -98,7 +99,7 @@ const runReport = async () => {
 const runStatusReport = async (status) => {
   $('#sales-report-view').classList.add('d-none');
   $('#activity-report-view').classList.remove('d-none');
-  $('#activity-title').textContent = status === 'paid' ? 'Paid Bills' : 'Returned Bills';
+  $('#activity-title').textContent = status === 'paid' ? t('paidBills') : t('returnedBills');
   const rows = await statusRows(status);
   $('#activity-report-body').innerHTML = rows.length ? rows.map(row => `
     <tr>
@@ -109,14 +110,14 @@ const runStatusReport = async (status) => {
       <td class="fw-bold">${money(row.bill_amount)}</td>
       <td>${new Date(row.date).toLocaleString()}</td>
     </tr>
-  `).join('') : '<tr><td colspan="6" class="text-center text-muted py-4">No bills found.</td></tr>';
+  `).join('') : `<tr><td colspan="6" class="text-center text-muted py-4">${t('noBillsFound')}</td></tr>`;
 };
 
 const runActivityReport = async (type) => {
   $('#sales-report-view').classList.add('d-none');
   $('#activity-report-view').classList.remove('d-none');
-  const titleMap = { deleted: 'Deleted Bills', modified: 'Modified Bills', returned: 'Returned Bills' };
-  $('#activity-title').textContent = titleMap[type] || 'Bill Activity';
+  const titleMap = { deleted: t('deletedBills'), modified: t('modifiedBills'), returned: t('returnedBills') };
+  $('#activity-title').textContent = titleMap[type] || t('billActivity');
   const rows = await db.getBillActivity(type, { from: $('#report-from').value, to: $('#report-to').value });
   $('#activity-report-body').innerHTML = rows.length ? rows.map(row => `
     <tr>
@@ -127,7 +128,7 @@ const runActivityReport = async (type) => {
       <td class="fw-bold">${money(activityBillAmount(row))}</td>
       <td>${new Date(row.created_at).toLocaleString()}</td>
     </tr>
-  `).join('') : '<tr><td colspan="6" class="text-center text-muted py-4">No bill activity found.</td></tr>';
+  `).join('') : `<tr><td colspan="6" class="text-center text-muted py-4">${t('noBillActivityFound')}</td></tr>`;
 };
 
 const exportRowsForType = async (type) => {
@@ -140,7 +141,7 @@ const exportRowsForType = async (type) => {
 const runUnpaidReport = async () => {
   $('#sales-report-view').classList.add('d-none');
   $('#activity-report-view').classList.remove('d-none');
-  $('#activity-title').textContent = 'Saved Unpaid Bills';
+  $('#activity-title').textContent = t('savedUnpaidBills');
   const rows = await unpaidRows();
   $('#activity-report-body').innerHTML = rows.length ? rows.map(row => `
     <tr>
@@ -151,7 +152,7 @@ const runUnpaidReport = async () => {
       <td class="fw-bold">${money(row.bill_amount)}</td>
       <td>${new Date(row.date).toLocaleString()}</td>
     </tr>
-  `).join('') : '<tr><td colspan="6" class="text-center text-muted py-4">No saved unpaid bills found.</td></tr>';
+  `).join('') : `<tr><td colspan="6" class="text-center text-muted py-4">${t('noSavedUnpaidBillsFound')}</td></tr>`;
 };
 
 const unpaidRows = async () => {

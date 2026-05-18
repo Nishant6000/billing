@@ -1,6 +1,7 @@
 import { db } from '../js/db.js';
 import { $, UNIT_GROUPS, debounce, escapeHtml, formatBasePrice, formatPackingChain, money, parsePackageUnits } from '../js/utils.js';
 import { closeModal, showModal, toast } from '../js/ui.js';
+import { localizedProductName, t } from '../js/i18n.js';
 
 const billingDisplayOptions = [
   { value: 'stock', label: 'Stock' },
@@ -24,18 +25,34 @@ const unitOptionsMarkup = (selected = 'Piece') => Object.entries(UNIT_GROUPS).ma
 const productForm = (product = {}, categories = []) => {
   const packageUnits = parsePackageUnits(product.package_units_json);
   return `
-  <div class="modal-header"><h5 class="modal-title">${product.id ? 'Edit' : 'Add'} Product</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
+  <div class="modal-header"><h5 class="modal-title">${product.id ? 'Edit' : 'Add'} ${t('product')}</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
   <form id="product-form">
     <div class="modal-body">
       <input type="hidden" name="id" value="${product.id || ''}">
       <input type="hidden" name="image" id="product-image-value" value="${escapeHtml(product.image || '')}">
       <div class="row g-3">
-        <div class="col-md-6"><label class="form-label">Product name</label><input class="form-control" name="product_name" value="${escapeHtml(product.product_name || '')}" required></div>
-        <div class="col-md-3"><label class="form-label">Barcode</label><input class="form-control" name="barcode" value="${escapeHtml(product.barcode || '')}"></div>
-        <div class="col-md-3"><label class="form-label">Category</label><select class="form-select" name="category_id">${categories.map(c => `<option value="${c.id}" ${Number(c.id) === Number(product.category_id) ? 'selected' : ''}>${escapeHtml(c.category_name)}</option>`).join('')}</select></div>
-        <div class="col-md-3"><label class="form-label">Base Price</label><input class="form-control" name="selling_price" type="number" step="0.01" value="${product.selling_price || 0}" required></div>
-        <div class="col-md-3"><label class="form-label">Base Quantity</label><input class="form-control" name="base_quantity" type="number" min="0.001" step="0.001" value="${product.base_quantity || 1}" required></div>
-        <div class="col-md-3"><label class="form-label">Base Unit</label><select class="form-select" name="base_unit">${unitOptionsMarkup(product.base_unit || 'Piece')}</select></div>
+        <div class="col-md-6"><label class="form-label">${t('productName')}</label><input class="form-control" name="product_name" value="${escapeHtml(product.product_name || '')}" required></div>
+        <div class="col-md-3"><label class="form-label">${t('barcode')}</label><input class="form-control" name="barcode" value="${escapeHtml(product.barcode || '')}"></div>
+        <div class="col-md-3"><label class="form-label">${t('category')}</label><select class="form-select" name="category_id">${categories.map(c => `<option value="${c.id}" ${Number(c.id) === Number(product.category_id) ? 'selected' : ''}>${escapeHtml(c.category_name)}</option>`).join('')}</select></div>
+        <div class="col-12">
+          <div class="packing-panel">
+            <div class="d-flex align-items-center gap-2 mb-2">
+              <i class="fa-solid fa-language text-primary"></i>
+              <strong>Product names in other languages</strong>
+            </div>
+            <div class="row g-3">
+              <div class="col-md-4"><label class="form-label">Hindi</label><input class="form-control" name="product_name_hi" value="${escapeHtml(product.product_name_hi || '')}"></div>
+              <div class="col-md-4"><label class="form-label">Tamil</label><input class="form-control" name="product_name_ta" value="${escapeHtml(product.product_name_ta || '')}"></div>
+              <div class="col-md-4"><label class="form-label">Telugu</label><input class="form-control" name="product_name_te" value="${escapeHtml(product.product_name_te || '')}"></div>
+              <div class="col-md-4"><label class="form-label">Marathi</label><input class="form-control" name="product_name_mr" value="${escapeHtml(product.product_name_mr || '')}"></div>
+              <div class="col-md-4"><label class="form-label">Malayalam</label><input class="form-control" name="product_name_ml" value="${escapeHtml(product.product_name_ml || '')}"></div>
+              <div class="col-md-4"><label class="form-label">Kannada</label><input class="form-control" name="product_name_kn" value="${escapeHtml(product.product_name_kn || '')}"></div>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-3"><label class="form-label">${t('basePrice')}</label><input class="form-control" name="selling_price" type="number" step="0.01" value="${product.selling_price || 0}" required></div>
+        <div class="col-md-3"><label class="form-label">${t('baseQuantity')}</label><input class="form-control" name="base_quantity" type="number" min="0.001" step="0.001" value="${product.base_quantity || 1}" required></div>
+        <div class="col-md-3"><label class="form-label">${t('baseUnit')}</label><select class="form-select" name="base_unit">${unitOptionsMarkup(product.base_unit || 'Piece')}</select></div>
         <div class="col-12 d-none" id="packing-fields">
           <div class="packing-panel">
             <div class="d-flex align-items-center gap-2 mb-2">
@@ -58,13 +75,13 @@ const productForm = (product = {}, categories = []) => {
             </div>
           </div>
         </div>
-        <div class="col-md-3"><label class="form-label">Discount Type</label><select class="form-select" name="product_discount_type"><option value="none">No Discount</option><option value="amount" ${product.product_discount_type === 'amount' ? 'selected' : ''}>Amount</option><option value="percent" ${product.product_discount_type === 'percent' ? 'selected' : ''}>Percentage</option></select></div>
-        <div class="col-md-3"><label class="form-label">Discount Value</label><input class="form-control" name="product_discount_value" type="number" min="0" step="0.01" value="${product.product_discount_value || 0}"></div>
+        <div class="col-md-3"><label class="form-label">${t('discountType')}</label><select class="form-select" name="product_discount_type"><option value="none">No Discount</option><option value="amount" ${product.product_discount_type === 'amount' ? 'selected' : ''}>Amount</option><option value="percent" ${product.product_discount_type === 'percent' ? 'selected' : ''}>Percentage</option></select></div>
+        <div class="col-md-3"><label class="form-label">${t('discountValue')}</label><input class="form-control" name="product_discount_value" type="number" min="0" step="0.01" value="${product.product_discount_value || 0}"></div>
         <div class="col-md-3"><label class="form-label">GST %</label><input class="form-control" name="gst_percent" type="number" step="0.01" value="${product.gst_percent || 0}"></div>
-        <div class="col-md-3"><label class="form-label">Stock</label><input class="form-control" name="stock" type="number" value="${product.stock || 0}"></div>
-        <div class="col-md-3"><label class="form-label">Shelf No</label><input class="form-control" name="shelf_no" value="${escapeHtml(product.shelf_no || '')}" pattern="[A-Za-z0-9-]*" title="Use letters, numbers, or hyphen only"></div>
-        <div class="col-md-3"><label class="form-label">Box No</label><input class="form-control" name="box_no" value="${escapeHtml(product.box_no || '')}" pattern="[A-Za-z0-9-]*" title="Use letters, numbers, or hyphen only"></div>
-        <div class="col-md-6"><label class="form-label">Description</label><textarea class="form-control" name="description" rows="2">${escapeHtml(product.description || '')}</textarea></div>
+        <div class="col-md-3"><label class="form-label">${t('stock')}</label><input class="form-control" name="stock" type="number" value="${product.stock || 0}"></div>
+        <div class="col-md-3"><label class="form-label">${t('shelfNo')}</label><input class="form-control" name="shelf_no" value="${escapeHtml(product.shelf_no || '')}" pattern="[A-Za-z0-9-]*" title="Use letters, numbers, or hyphen only"></div>
+        <div class="col-md-3"><label class="form-label">${t('boxNo')}</label><input class="form-control" name="box_no" value="${escapeHtml(product.box_no || '')}" pattern="[A-Za-z0-9-]*" title="Use letters, numbers, or hyphen only"></div>
+        <div class="col-md-6"><label class="form-label">${t('description')}</label><textarea class="form-control" name="description" rows="2">${escapeHtml(product.description || '')}</textarea></div>
         <div class="col-md-6">
           <label class="form-label">Show in Billing Product Card</label>
           <div class="billing-display-options">
@@ -77,19 +94,19 @@ const productForm = (product = {}, categories = []) => {
           </div>
         </div>
         <div class="col-md-3">
-          <label class="form-label">Upload photo</label>
+          <label class="form-label">${t('uploadPhoto')}</label>
           <input class="form-control" id="product-image-upload" type="file" accept="image/*">
         </div>
         <div class="col-12">
           <div class="product-upload-preview" id="product-image-preview">
             ${product.image
               ? `<img src="${escapeHtml(product.image)}" alt="${escapeHtml(product.product_name || 'Product photo')}">`
-              : '<div><i class="fa-solid fa-image"></i><span>No photo uploaded</span></div>'}
+              : `<div><i class="fa-solid fa-image"></i><span>${t('noPhotoUploaded')}</span></div>`}
           </div>
         </div>
       </div>
     </div>
-    <div class="modal-footer"><button class="btn btn-light" data-bs-dismiss="modal" type="button">Cancel</button><button class="btn btn-primary-gradient">Save Product</button></div>
+    <div class="modal-footer"><button class="btn btn-light" data-bs-dismiss="modal" type="button">${t('cancel')}</button><button class="btn btn-primary-gradient">${t('saveProduct')}</button></div>
   </form>
 `;
 };
@@ -98,7 +115,7 @@ const renderRows = async (search = '') => {
   const products = await db.getProducts(search);
   $('#products-body').innerHTML = products.map(product => `
     <tr class="touch-row">
-      <td><strong>${escapeHtml(product.product_name)}</strong><div class="text-muted small">${escapeHtml(product.barcode || 'No barcode')}</div></td>
+      <td><strong>${escapeHtml(localizedProductName(product))}</strong>${localizedProductName(product) !== product.product_name ? `<div class="text-muted small">${escapeHtml(product.product_name)}</div>` : ''}<div class="text-muted small">${escapeHtml(product.barcode || 'No barcode')}</div></td>
       <td>${escapeHtml(product.category_name || '-')}</td>
       <td>${formatBasePrice(product)}<div class="text-muted small">${productDiscountLabel(product)}</div>${formatPackingChain(product) ? `<div class="text-muted small">${escapeHtml(formatPackingChain(product))}</div>` : ''}</td>
       <td>${product.gst_percent}%</td>
@@ -115,16 +132,16 @@ export const renderProducts = async () => {
   $('#view').innerHTML = `
     <div class="pos-card">
       <div class="d-flex flex-wrap gap-2 justify-content-between align-items-center mb-3">
-        <div><h2 class="section-title mb-1">Products</h2><p class="text-muted mb-0">Manage categories, barcode, GST, price, and stock.</p></div>
-        <button class="btn btn-primary-gradient" id="add-product"><i class="fa-solid fa-plus"></i> Add Product</button>
+        <div><h2 class="section-title mb-1">${t('route.products')}</h2><p class="text-muted mb-0">${t('productsHelp')}</p></div>
+        <button class="btn btn-primary-gradient" id="add-product"><i class="fa-solid fa-plus"></i> ${t('addProduct')}</button>
       </div>
       <div class="row g-2 mb-3">
-        <div class="col-md-8"><input class="form-control" id="product-search" placeholder="Search by product name or barcode"></div>
-        <div class="col-md-4"><button class="btn btn-outline-secondary w-100" id="add-category"><i class="fa-solid fa-tags"></i> Add Category</button></div>
+        <div class="col-md-8"><input class="form-control" id="product-search" placeholder="${t('searchProductBarcode')}"></div>
+        <div class="col-md-4"><button class="btn btn-outline-secondary w-100" id="add-category"><i class="fa-solid fa-tags"></i> ${t('addCategory')}</button></div>
       </div>
       <div class="table-responsive">
         <table class="table">
-          <thead><tr><th>Product</th><th>Category</th><th>Price</th><th>GST</th><th>Stock / Location</th><th></th></tr></thead>
+          <thead><tr><th>${t('product')}</th><th>${t('category')}</th><th>${t('price')}</th><th>GST</th><th>${t('stockLocation')}</th><th></th></tr></thead>
           <tbody id="products-body"></tbody>
         </table>
       </div>
@@ -182,6 +199,12 @@ const openProductModal = async (product = {}) => {
       id: form.id ? Number(form.id) : undefined,
       category_id: Number(form.category_id),
       product_name: form.product_name.trim(),
+      product_name_hi: form.product_name_hi?.trim() || '',
+      product_name_ta: form.product_name_ta?.trim() || '',
+      product_name_te: form.product_name_te?.trim() || '',
+      product_name_mr: form.product_name_mr?.trim() || '',
+      product_name_ml: form.product_name_ml?.trim() || '',
+      product_name_kn: form.product_name_kn?.trim() || '',
       barcode: form.barcode.trim(),
       selling_price: Number(form.selling_price),
       base_quantity: Number(form.base_quantity || 1),

@@ -2,6 +2,7 @@ import { APP_CONFIG } from './config.js';
 import { $, $$ } from './utils.js';
 import { setTitle, toast } from './ui.js';
 import { canAccessRoute, getCurrentUser, visibleRoutesForUser } from './auth.js';
+import { routeTitle, t } from './i18n.js';
 import { renderDashboard } from '../pages/dashboard.js';
 import { renderBilling } from '../pages/billing.js';
 import { renderTables } from '../pages/tables.js';
@@ -39,8 +40,8 @@ export const renderNav = () => {
   const routes = visibleRoutesForUser(getCurrentUser())
     .filter(route => billingMode === 'table' || route.id !== 'tables');
   $('#nav-menu').innerHTML = routes.map(route => `
-    <a class="nav-link-pos" href="#/${route.id}" data-route="${route.id}" title="${route.title}">
-      <i class="fa-solid ${route.icon}"></i><span>${route.title}</span>
+    <a class="nav-link-pos" href="#/${route.id}" data-route="${route.id}" title="${routeTitle(route)}">
+      <i class="fa-solid ${route.icon}"></i><span>${routeTitle(route)}</span>
     </a>
   `).join('');
 };
@@ -49,7 +50,7 @@ export const navigate = async (routeId = 'dashboard') => {
   const user = getCurrentUser();
   if (!user) {
     renderNav();
-    setTitle('PIN Login');
+    setTitle(t('pinLogin'));
     return;
   }
   const route = APP_CONFIG.routes.find(item => item.id === routeId) || APP_CONFIG.routes[0];
@@ -59,7 +60,7 @@ export const navigate = async (routeId = 'dashboard') => {
     if (location.hash !== `#/${firstAllowed.id}`) location.hash = `#/${firstAllowed.id}`;
     if (firstAllowed.id !== route.id) return await navigate(firstAllowed.id);
   }
-  setTitle(route.title);
+  setTitle(routeTitle(route));
   $$('.nav-link-pos').forEach(link => link.classList.toggle('active', link.dataset.route === route.id));
   await (routes[route.id] || routes.dashboard)();
   $('#sidebar').classList.remove('open');

@@ -3,6 +3,7 @@ import { $, escapeHtml } from './utils.js';
 import { clearCurrentUser, getCurrentUser, setCurrentUser } from './auth.js';
 import { initRouter, navigate, renderNav } from './router.js';
 import { setTitle, toast } from './ui.js';
+import { setLanguage, t } from './i18n.js';
 
 const hideSplash = () => {
   const splash = $('#splash-screen');
@@ -24,6 +25,19 @@ const updateShopNameLabel = async () => {
   const settings = await db.getSettings();
   $('#shop-name-label').textContent = settings.shop_name || 'Ginsoft POS Store';
   localStorage.setItem('pos-billing-mode', settings.billing_mode || 'direct');
+  setLanguage(settings.language || localStorage.getItem('pos-language') || 'en');
+  updateStaticLabels();
+};
+
+const updateStaticLabels = () => {
+  const refreshLabel = $('#page-refresh span');
+  const logoutLabel = $('#logout-user span');
+  const newBillButton = $('[data-action="new-bill"]');
+  if (refreshLabel) refreshLabel.textContent = t('refresh');
+  if (logoutLabel) logoutLabel.textContent = t('logout');
+  if (newBillButton) newBillButton.innerHTML = `<i class="fa-solid fa-plus"></i> ${t('newBill')}`;
+  $('#page-refresh')?.setAttribute('title', t('refresh'));
+  $('#logout-user')?.setAttribute('title', t('logout'));
 };
 
 const updateUserLabel = () => {
@@ -35,7 +49,7 @@ const updateUserLabel = () => {
   shell.classList.toggle('auth-locked', !user);
   label.innerHTML = user
     ? `<i class="fa-solid fa-user-shield"></i> ${escapeHtml(user.full_name)} · ${escapeHtml(user.role)}`
-    : '<i class="fa-solid fa-lock"></i> Locked';
+    : `<i class="fa-solid fa-lock"></i> ${t('locked')}`;
   logoutButton.classList.toggle('d-none', !user);
   newBillButton.classList.toggle('d-none', !user);
 };
@@ -62,21 +76,21 @@ const renderLogin = async () => {
   const userOptions = activeUsers.map(user => `
     <option value="${escapeHtml(user.user_id)}">${escapeHtml(user.full_name)} (${escapeHtml(user.user_id)})</option>
   `).join('');
-  setTitle('PIN Login');
+  setTitle(t('pinLogin'));
   $('#view').innerHTML = `
     <div class="login-shell">
       <form class="login-card" id="pin-login-form">
         <div class="login-mark"><i class="fa-solid fa-cash-register"></i></div>
         <p class="eyebrow mb-1">Ginsoft POS</p>
-        <h2>Enter PIN</h2>
-        <p class="text-muted mb-3">Default login is User ID <strong>owner</strong> with PIN <strong>1234</strong>. Change it from Settings after login.</p>
-        <label class="form-label">User ID</label>
+        <h2>${t('enterPin')}</h2>
+        <p class="text-muted mb-3">${t('defaultLoginHelp')}</p>
+        <label class="form-label">${t('userId')}</label>
         <select class="form-select form-select-lg mb-3" name="user_id" required>
           ${userOptions || '<option value="owner">Owner (owner)</option>'}
         </select>
-        <label class="form-label">User PIN</label>
+        <label class="form-label">${t('userPin')}</label>
         <input class="form-control form-control-lg text-center pin-input" name="pin" type="password" inputmode="numeric" pattern="[0-9]{4,8}" maxlength="8" autocomplete="current-password" required autofocus>
-        <button class="btn btn-primary-gradient w-100 mt-3" type="submit"><i class="fa-solid fa-unlock-keyhole"></i> Login</button>
+        <button class="btn btn-primary-gradient w-100 mt-3" type="submit"><i class="fa-solid fa-unlock-keyhole"></i> ${t('login')}</button>
       </form>
     </div>
   `;
