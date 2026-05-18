@@ -1,6 +1,6 @@
 import { db } from '../js/db.js';
 import { getCurrentUser } from '../js/auth.js';
-import { $, calculateCart, calculateCartLines, debounce, escapeHtml, formatBasePrice, formatPackingChain, formatQuantity, money, productDiscountAmount, saleUnitsForProduct } from '../js/utils.js';
+import { $, calculateCart, calculateCartLines, debounce, escapeHtml, formatBasePrice, formatPackingChain, formatQuantity, money, productDiscountAmount, saleUnitsForProduct, stockQuantityUsed } from '../js/utils.js';
 import { closeModal, showModal, toast } from '../js/ui.js';
 import { displayStatus, displayTableArea, displayTableName, localizedProductName, t } from '../js/i18n.js';
 
@@ -39,6 +39,22 @@ const productPriceMarkup = (product) => {
 const unitSelectMarkup = (item) => saleUnitsForProduct(item)
   .map(unit => `<option value="${unit}" ${(item.sale_unit || item.base_unit || 'Piece') === unit ? 'selected' : ''}>${unit}</option>`)
   .join('');
+
+const availableStock = (item) => Number(item.stock ?? Number.POSITIVE_INFINITY);
+
+const stockMessage = (item) => {
+  if (availableStock(item) <= 0) return `${item.product_name} is out of stock`;
+  return `${item.product_name} has only ${formatQuantity(availableStock(item), item.base_unit || 'Piece')} in stock`;
+};
+
+const hasEnoughStock = (item) => availableStock(item) === Number.POSITIVE_INFINITY || stockQuantityUsed(item) <= availableStock(item);
+
+const validateCartStock = () => {
+  const invalidItem = cart.find(item => !hasEnoughStock(item));
+  if (!invalidItem) return true;
+  toast(stockMessage(invalidItem), 'warning');
+  return false;
+};
 
 const renderCart = () => {
   const discount = Number($('#discount')?.value || 0);
@@ -105,7 +121,12 @@ const renderProducts = async (search = '') => {
 const addProductToCart = async (id) => {
   const product = (await db.getProducts()).find(item => Number(item.id) === Number(id));
   if (!product) return;
+  if (availableStock(product) <= 0) return toast(`${product.product_name} is out of stock`, 'warning');
   const existing = cart.find(item => Number(item.id) === Number(id));
+  const candidate = existing
+    ? { ...existing, quantity: activeRestaurantContext ? Number(existing.base_quantity || 1) : Number(existing.quantity || 0) + Number(existing.base_quantity || 1) }
+    : { ...product, quantity: Number(product.base_quantity || 1), sale_unit: product.base_unit || 'Piece' };
+  if (!hasEnoughStock(candidate)) return toast(stockMessage(candidate), 'warning');
   if (existing && activeRestaurantContext) {
     existing.quantity = Number(existing.base_quantity || 1);
     existing.sale_unit = existing.base_unit || 'Piece';
@@ -177,7 +198,12 @@ export const renderBilling = async () => {
     const button = event.target.closest('[data-qty]');
     if (!button) return;
     const item = cart.find(row => Number(row.id) === Number(button.dataset.qty));
-    item.quantity = Number(item.quantity || 0) + Number(button.dataset.delta);
+    const previousQuantity = Number(item.quantity || 0);
+    item.quantity = previousQuantity + Number(button.dataset.delta);
+    if (!hasEnoughStock(item)) {
+      item.quantity = previousQuantity;
+      toast(stockMessage(item), 'warning');
+    }
     cart = cart.filter(row => row.quantity > 0);
     renderCart();
   });
@@ -186,7 +212,12 @@ export const renderBilling = async () => {
     if (!input) return;
     const item = cart.find(row => Number(row.id) === Number(input.dataset.cartQuantity));
     if (!item) return;
+    const previousQuantity = Number(item.quantity || 0);
     item.quantity = Number(input.value || 0);
+    if (!hasEnoughStock(item)) {
+      item.quantity = previousQuantity;
+      toast(stockMessage(item), 'warning');
+    }
     cart = cart.filter(row => Number(row.quantity || 0) > 0);
     renderCart();
   });
@@ -195,7 +226,12 @@ export const renderBilling = async () => {
     if (!select) return;
     const item = cart.find(row => Number(row.id) === Number(select.dataset.cartUnit));
     if (!item) return;
+    const previousUnit = item.sale_unit;
     item.sale_unit = select.value;
+    if (!hasEnoughStock(item)) {
+      item.sale_unit = previousUnit;
+      toast(stockMessage(item), 'warning');
+    }
     renderCart();
   });
   $('#discount').addEventListener('input', renderCart);
@@ -215,7 +251,9 @@ export const renderBilling = async () => {
   $('#resume-bill').addEventListener('click', openHoldBills);
   $('#capture-weight')?.addEventListener('click', openWeightCapture);
   $('#billing-camera-scan').addEventListener('click', openBillingBarcodeScanner);
-  $('#pay-now').addEventListener('click', openPayment);
+  $('#pay-now').addEventListener('click', () => {
+    if (validateCartStock()) openPayment();
+  });
   await addPendingBarcodeToCart();
 };
 
@@ -343,7 +381,12 @@ const bindRestaurantOrderEvents = () => {
     const button = event.target.closest('[data-qty]');
     if (!button) return;
     const item = cart.find(row => Number(row.id) === Number(button.dataset.qty));
-    item.quantity = Number(item.quantity || 0) + Number(button.dataset.delta);
+    const previousQuantity = Number(item.quantity || 0);
+    item.quantity = previousQuantity + Number(button.dataset.delta);
+    if (!hasEnoughStock(item)) {
+      item.quantity = previousQuantity;
+      toast(stockMessage(item), 'warning');
+    }
     cart = cart.filter(row => row.quantity > 0);
     renderCart();
   });
@@ -352,12 +395,26 @@ const bindRestaurantOrderEvents = () => {
     const select = event.target.closest('[data-cart-unit]');
     if (input) {
       const item = cart.find(row => Number(row.id) === Number(input.dataset.cartQuantity));
-      if (item) item.quantity = Number(input.value || 0);
+      if (item) {
+        const previousQuantity = Number(item.quantity || 0);
+        item.quantity = Number(input.value || 0);
+        if (!hasEnoughStock(item)) {
+          item.quantity = previousQuantity;
+          toast(stockMessage(item), 'warning');
+        }
+      }
       cart = cart.filter(row => Number(row.quantity || 0) > 0);
     }
     if (select) {
       const item = cart.find(row => Number(row.id) === Number(select.dataset.cartUnit));
-      if (item) item.sale_unit = select.value;
+      if (item) {
+        const previousUnit = item.sale_unit;
+        item.sale_unit = select.value;
+        if (!hasEnoughStock(item)) {
+          item.sale_unit = previousUnit;
+          toast(stockMessage(item), 'warning');
+        }
+      }
     }
     renderCart();
   });
@@ -367,9 +424,14 @@ const bindRestaurantOrderEvents = () => {
     resetManualDiscount();
     renderCart();
   });
-  $('#save-table-order').addEventListener('click', saveRestaurantOrder);
-  $('#print-kot').addEventListener('click', printKot);
+  $('#save-table-order').addEventListener('click', () => {
+    if (validateCartStock()) saveRestaurantOrder();
+  });
+  $('#print-kot').addEventListener('click', () => {
+    if (validateCartStock()) printKot();
+  });
   $('#pay-now').addEventListener('click', async () => {
+    if (!validateCartStock()) return;
     await saveRestaurantOrder(false);
     await openPayment({ closeRestaurantOrder: true });
   });
@@ -378,6 +440,7 @@ const bindRestaurantOrderEvents = () => {
 const saveRestaurantOrder = async (showToast = true) => {
   if (!activeRestaurantContext) return;
   if (!cart.length) return toast('Add items before saving the order', 'warning');
+  if (!validateCartStock()) return;
   await db.saveTableOrder({
     tableId: activeRestaurantContext.tableId,
     orderType: activeRestaurantContext.orderType,
@@ -396,6 +459,7 @@ const saveRestaurantOrder = async (showToast = true) => {
 const printKot = async () => {
   if (!activeRestaurantContext) return;
   if (!cart.length) return toast('Add items before printing KOT', 'warning');
+  if (!validateCartStock()) return;
   const orderId = await db.saveTableOrder({
     tableId: activeRestaurantContext.tableId,
     orderType: activeRestaurantContext.orderType,
@@ -516,6 +580,7 @@ const addBarcodeToCurrentBill = async (code) => {
 
 const openPayment = async (options = {}) => {
   if (!cart.length) return toast(t('cartEmpty'), 'warning');
+  if (!validateCartStock()) return;
   const totals = calculateCart(cart, Number($('#discount').value || 0));
   const customers = await db.getCustomers();
   showModal(`
