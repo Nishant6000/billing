@@ -210,6 +210,7 @@ const formatBillActivityForExport = (rows) => rows.map(row => {
   const sale = previous.sale || {};
   const nextSale = next.sale || {};
   const items = previous.items || [];
+  const nextItems = next.items || [];
   return {
     invoice_no: row.invoice_no,
     activity: row.event_type,
@@ -232,7 +233,8 @@ const formatBillActivityForExport = (rows) => rows.map(row => {
     gst_after: numberText(nextSale.gst_total),
     total_after: numberText(nextSale.grand_total),
     product_count: items.length,
-    products: items.map(item => `${item.product_name} x ${formatQuantity(item.quantity, item.sale_unit || 'Piece')} @ ${numberText(item.price)} = ${numberText(item.line_total)}`).join(' | ')
+    products_before: items.map(item => `${item.product_name} x ${formatQuantity(item.quantity, item.sale_unit || 'Piece')} @ ${numberText(item.price)} = ${numberText(item.line_total)}`).join(' | '),
+    products_after: nextItems.map(item => `${item.product_name} x ${formatQuantity(item.quantity, item.sale_unit || 'Piece')} @ ${numberText(item.price)} = ${numberText(item.line_total)}`).join(' | ')
   };
 });
 

@@ -1,6 +1,6 @@
 import { db } from '../js/db.js';
 import { getCurrentUser } from '../js/auth.js';
-import { $, dateOnly, debounce, escapeHtml, formatQuantity, money } from '../js/utils.js';
+import { $, baseQuantity, baseUnit, dateOnly, debounce, effectiveUnitPrice, escapeHtml, formatQuantity, money } from '../js/utils.js';
 import { closeModal, showModal, toast } from '../js/ui.js';
 import { t } from '../js/i18n.js';
 
@@ -79,6 +79,8 @@ export const renderSales = async () => {
 };
 
 const openModifySale = async (sale) => {
+  const items = await db.getSaleItems(sale.id);
+  const products = await db.getProducts();
   showModal(`
     <div class="modal-header"><h5 class="modal-title">${t('modify')} ${escapeHtml(sale.invoice_no)}</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
     <form id="modify-sale-form">
@@ -88,14 +90,144 @@ const openModifySale = async (sale) => {
           <div class="col-md-4"><label class="form-label">${t('status')}</label><select class="form-select" name="status"><option value="paid" ${sale.status === 'paid' ? 'selected' : ''}>${t('paid')}</option><option value="returned" ${sale.status === 'returned' ? 'selected' : ''}>${t('returned')}</option></select></div>
           <div class="col-md-4"><label class="form-label">${t('billDiscount')}</label><input class="form-control" name="discount" type="number" min="0" step="0.01" value="${Number(sale.discount || 0)}"></div>
           <div class="col-12"><label class="form-label">${t('modificationNote')}</label><input class="form-control" name="note" placeholder="${t('reasonForModification')}"></div>
+          <div class="col-12">
+            <label class="form-label">${t('addProduct')}</label>
+            <div class="position-relative">
+              <input class="form-control" id="modify-product-search" placeholder="${t('searchProductBarcode')}" autocomplete="off">
+              <div class="customer-suggest-box d-none" id="modify-product-suggestions"></div>
+            </div>
+          </div>
+          <div class="col-12">
+            <label class="form-label">${t('route.products')}</label>
+            <div class="table-responsive">
+              <table class="table align-middle">
+                <thead><tr><th>${t('product')}</th><th>${t('qty')}</th><th>${t('rate')}</th><th>GST %</th><th class="text-end">${t('amount')}</th><th></th></tr></thead>
+                <tbody id="modify-sale-items">
+                  ${items.map(item => `
+                    <tr class="sale-item-edit-row" data-item-id="${item.id}" data-product-id="${item.product_id || ''}" data-product-name="${escapeHtml(item.product_name)}" data-sale-unit="${escapeHtml(item.sale_unit || 'Piece')}">
+                      <td><strong>${escapeHtml(item.product_name)}</strong><div class="text-muted small">${escapeHtml(item.sale_unit || 'Piece')}</div></td>
+                      <td><input class="form-control form-control-sm sale-edit-qty" type="number" min="0" step="0.001" value="${Number(item.quantity || 0)}"></td>
+                      <td><input class="form-control form-control-sm sale-edit-price" type="number" min="0" step="0.01" value="${Number(item.price || 0)}"></td>
+                      <td><input class="form-control form-control-sm sale-edit-gst" type="number" min="0" step="0.01" value="${Number(item.gst_percent || 0)}"></td>
+                      <td class="text-end fw-bold sale-edit-line-total">${money(item.line_total)}</td>
+                      <td class="text-end"><button class="btn btn-sm btn-outline-danger" type="button" data-remove-sale-item title="${t('delete')}"><i class="fa-solid fa-trash"></i></button></td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div class="col-12">
+            <div class="d-flex flex-wrap justify-content-end gap-3 text-end">
+              <div><div class="text-muted small">${t('subtotal')}</div><strong id="modify-subtotal">${money(sale.subtotal)}</strong></div>
+              <div><div class="text-muted small">GST</div><strong id="modify-gst">${money(sale.gst_total)}</strong></div>
+              <div><div class="text-muted small">${t('grandTotal')}</div><strong id="modify-grand-total">${money(sale.grand_total)}</strong></div>
+            </div>
+          </div>
         </div>
       </div>
       <div class="modal-footer"><button class="btn btn-light" type="button" data-bs-dismiss="modal">${t('cancel')}</button><button class="btn btn-primary-gradient">${t('saveChanges')}</button></div>
     </form>
   `);
+  const productUnitPrice = (product) => effectiveUnitPrice(product) / baseQuantity(product);
+  const saleItemRowHtml = (item) => `
+    <tr class="sale-item-edit-row" data-item-id="${item.id || ''}" data-product-id="${item.product_id || ''}" data-product-name="${escapeHtml(item.product_name)}" data-sale-unit="${escapeHtml(item.sale_unit || 'Piece')}">
+      <td><strong>${escapeHtml(item.product_name)}</strong><div class="text-muted small">${escapeHtml(item.sale_unit || 'Piece')}</div></td>
+      <td><input class="form-control form-control-sm sale-edit-qty" type="number" min="0" step="0.001" value="${Number(item.quantity || 0)}"></td>
+      <td><input class="form-control form-control-sm sale-edit-price" type="number" min="0" step="0.01" value="${Number(item.price || 0)}"></td>
+      <td><input class="form-control form-control-sm sale-edit-gst" type="number" min="0" step="0.01" value="${Number(item.gst_percent || 0)}"></td>
+      <td class="text-end fw-bold sale-edit-line-total">${money(item.line_total || 0)}</td>
+      <td class="text-end"><button class="btn btn-sm btn-outline-danger" type="button" data-remove-sale-item title="${t('delete')}"><i class="fa-solid fa-trash"></i></button></td>
+    </tr>
+  `;
+  const productSuggestionHtml = (productList = []) => productList.length
+    ? productList.slice(0, 8).map(product => `
+      <button class="customer-suggest-item" type="button" data-add-product-id="${product.id}">
+        <span>
+          <strong>${escapeHtml(product.product_name)}</strong>
+          <small>${escapeHtml(formatQuantity(baseQuantity(product), baseUnit(product)))} | ${money(effectiveUnitPrice(product))} | Stock ${Number(product.stock || 0)}</small>
+        </span>
+        ${product.barcode ? `<em>${escapeHtml(product.barcode)}</em>` : ''}
+      </button>
+    `).join('')
+    : '<div class="customer-suggest-empty">No products found</div>';
+  const renderProductSuggestions = (term = '') => {
+    const normalized = term.trim().toLowerCase();
+    const filtered = products.filter(product => `${product.product_name || ''} ${product.barcode || ''} ${product.category_name || ''}`.toLowerCase().includes(normalized));
+    $('#modify-product-suggestions').innerHTML = productSuggestionHtml(filtered);
+    $('#modify-product-suggestions').classList.remove('d-none');
+  };
+  const addProductToModifiedBill = (productId) => {
+    const product = products.find(item => Number(item.id) === Number(productId));
+    if (!product) return;
+    const quantity = baseQuantity(product);
+    const price = productUnitPrice(product);
+    const row = {
+      id: '',
+      product_id: product.id,
+      product_name: product.product_name,
+      quantity,
+      sale_unit: baseUnit(product),
+      price,
+      gst_percent: Number(product.gst_percent || 0),
+      line_total: quantity * price * (1 + (Number(product.gst_percent || 0) / 100))
+    };
+    $('#modify-sale-items').insertAdjacentHTML('beforeend', saleItemRowHtml(row));
+    $('#modify-product-search').value = '';
+    $('#modify-product-suggestions').classList.add('d-none');
+    updateModifyTotals();
+  };
+  const readEditedItems = () => [...document.querySelectorAll('.sale-item-edit-row')].map(row => ({
+    id: Number(row.dataset.itemId),
+    product_id: Number(row.dataset.productId || 0) || null,
+    product_name: row.dataset.productName || '',
+    sale_unit: row.dataset.saleUnit || 'Piece',
+    quantity: Number(row.querySelector('.sale-edit-qty').value || 0),
+    price: Number(row.querySelector('.sale-edit-price').value || 0),
+    gst_percent: Number(row.querySelector('.sale-edit-gst').value || 0)
+  })).filter(item => item.quantity > 0);
+  const updateModifyTotals = () => {
+    const editedItems = readEditedItems();
+    const subtotal = editedItems.reduce((sum, item) => sum + (item.quantity * item.price), 0);
+    const discount = Math.min(Math.max(0, Number($('#modify-sale-form [name="discount"]').value || 0)), subtotal);
+    const gstTotal = editedItems.reduce((sum, item) => {
+      const taxable = item.quantity * item.price;
+      const discountShare = subtotal > 0 ? discount * (taxable / subtotal) : 0;
+      const taxableAfterDiscount = Math.max(0, taxable - discountShare);
+      return sum + (taxableAfterDiscount * (item.gst_percent / 100));
+    }, 0);
+    document.querySelectorAll('.sale-item-edit-row').forEach(row => {
+      const qty = Number(row.querySelector('.sale-edit-qty').value || 0);
+      const price = Number(row.querySelector('.sale-edit-price').value || 0);
+      const gst = Number(row.querySelector('.sale-edit-gst').value || 0);
+      const taxable = qty * price;
+      const discountShare = subtotal > 0 ? discount * (taxable / subtotal) : 0;
+      const total = Math.max(0, taxable - discountShare) * (1 + (gst / 100));
+      row.querySelector('.sale-edit-line-total').textContent = money(total);
+    });
+    $('#modify-subtotal').textContent = money(subtotal);
+    $('#modify-gst').textContent = money(gstTotal);
+    $('#modify-grand-total').textContent = money(Math.max(0, subtotal - discount + gstTotal));
+  };
+  $('#modify-sale-form').addEventListener('input', updateModifyTotals);
+  $('#modify-product-search').addEventListener('input', () => renderProductSuggestions($('#modify-product-search').value));
+  $('#modify-product-search').addEventListener('focus', () => renderProductSuggestions($('#modify-product-search').value));
+  $('#modify-product-suggestions').addEventListener('click', (event) => {
+    const productId = event.target.closest('[data-add-product-id]')?.dataset.addProductId;
+    if (productId) addProductToModifiedBill(productId);
+  });
+  $('#modify-sale-items').addEventListener('click', (event) => {
+    const removeButton = event.target.closest('[data-remove-sale-item]');
+    if (!removeButton) return;
+    removeButton.closest('.sale-item-edit-row')?.remove();
+    updateModifyTotals();
+  });
+  updateModifyTotals();
   $('#modify-sale-form').addEventListener('submit', async (event) => {
     event.preventDefault();
     const form = Object.fromEntries(new FormData(event.currentTarget).entries());
+    form.items = readEditedItems();
+    if (!form.items.length) return toast('Bill must have at least one product', 'warning');
     await db.updateSale(sale.id, form, getCurrentUser());
     closeModal();
     toast(t('billModified'));

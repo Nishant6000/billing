@@ -975,34 +975,109 @@ class POSDatabase {
   async updateSale(id, updates, user = null) {
     const before = await this.getSaleSnapshot(id);
     if (!before) return;
-    const items = before.items.map(item => ({
-      ...item,
-      sale_item_id: item.id,
-      id: item.product_id,
-      selling_price: Number(item.price),
-      base_quantity: 1,
-      base_unit: item.sale_unit || 'Piece',
-      sale_unit: item.sale_unit || 'Piece',
-      quantity: Number(item.quantity)
-    }));
-    const subtotal = calculateCartLines(items, 0).reduce((sum, line) => sum + line.taxable, 0);
+    const editedItems = Array.isArray(updates.items) && updates.items.length
+      ? updates.items
+        .map(item => ({
+          id: Number(item.id || 0),
+          product_id: Number(item.product_id || 0) || null,
+          product_name: String(item.product_name || '').trim(),
+          quantity: Number(item.quantity || 0),
+          sale_unit: item.sale_unit || 'Piece',
+          price: Number(item.price || 0),
+          gst_percent: Number(item.gst_percent || 0)
+        }))
+        .filter(item => item.product_name && item.quantity > 0)
+      : before.items.map(item => ({
+        id: Number(item.id),
+        product_id: Number(item.product_id || 0) || null,
+        product_name: item.product_name,
+        quantity: Number(item.quantity || 0),
+        sale_unit: item.sale_unit || 'Piece',
+        price: Number(item.price || 0),
+        gst_percent: Number(item.gst_percent || 0)
+      }));
+    if (!editedItems.length) throw new Error('Bill must have at least one product');
+    const subtotal = editedItems.reduce((sum, item) => sum + (Number(item.quantity || 0) * Number(item.price || 0)), 0);
     const discount = Math.min(Math.max(0, Number(updates.discount || 0)), subtotal);
-    const lines = calculateCartLines(items, discount);
+    const lines = editedItems.map(item => {
+      const taxable = Number(item.quantity || 0) * Number(item.price || 0);
+      const discountShare = subtotal > 0 ? discount * (taxable / subtotal) : 0;
+      const taxableAfterDiscount = Math.max(0, taxable - discountShare);
+      const gstAmount = taxableAfterDiscount * (Number(item.gst_percent || 0) / 100);
+      return { item, taxable, discountShare, taxableAfterDiscount, gstAmount, lineTotal: taxableAfterDiscount + gstAmount };
+    });
     const gstTotal = lines.reduce((sum, line) => sum + line.gstAmount, 0);
     const grandTotal = subtotal - discount + gstTotal;
     const paymentType = updates.payment_type || before.sale.payment_type;
     const status = updates.status || before.sale.status || 'paid';
+    const beforeItemsById = new Map(before.items.map(item => [Number(item.id), item]));
+    const products = await this.getProducts();
+    const productMap = new Map(products.map(product => [Number(product.id), product]));
+    const saleItemStockUsed = (item = {}) => {
+      const product = productMap.get(Number(item.product_id));
+      return product
+        ? stockQuantityUsed({ ...product, quantity: Number(item.quantity || 0), sale_unit: item.sale_unit || product.base_unit || 'Piece' })
+        : Number(item.quantity || 0);
+    };
 
     if (this.mode === 'sqlite') {
       await this.run('UPDATE sales SET subtotal=?, discount=?, gst_total=?, grand_total=?, payment_type=?, status=? WHERE id=?', [subtotal, discount, gstTotal, grandTotal, paymentType, status, id]);
       for (const line of lines) {
-        await this.run('UPDATE sale_items SET price=?, gst_amount=?, line_total=? WHERE id=?', [line.unitPrice, line.gstAmount, line.lineTotal, line.item.sale_item_id]);
+        const oldItem = beforeItemsById.get(Number(line.item.id));
+        if (oldItem) {
+          await this.run('UPDATE sale_items SET product_name=?, quantity=?, sale_unit=?, price=?, gst_percent=?, gst_amount=?, line_total=? WHERE id=?', [line.item.product_name, line.item.quantity, line.item.sale_unit, line.item.price, line.item.gst_percent, line.gstAmount, line.lineTotal, line.item.id]);
+          const stockDelta = saleItemStockUsed(oldItem) - saleItemStockUsed(line.item);
+          if (stockDelta) await this.run('UPDATE products SET stock = MAX(stock + ?, 0) WHERE id=?', [stockDelta, oldItem.product_id]);
+          beforeItemsById.delete(Number(line.item.id));
+        } else {
+          await this.run(`
+            INSERT INTO sale_items(sale_id, product_id, product_name, quantity, sale_unit, price, gst_percent, gst_amount, line_total)
+            VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `, [id, line.item.product_id, line.item.product_name, line.item.quantity, line.item.sale_unit, line.item.price, line.item.gst_percent, line.gstAmount, line.lineTotal]);
+          if (line.item.product_id) await this.run('UPDATE products SET stock = MAX(stock - ?, 0) WHERE id=?', [saleItemStockUsed(line.item), line.item.product_id]);
+        }
+      }
+      for (const removed of beforeItemsById.values()) {
+        await this.run('DELETE FROM sale_items WHERE id=?', [removed.id]);
+        if (removed.product_id) await this.run('UPDATE products SET stock = stock + ? WHERE id=?', [saleItemStockUsed(removed), removed.product_id]);
       }
       await this.run('UPDATE payments SET payment_type=?, amount=? WHERE sale_id=?', [paymentType, grandTotal, id]);
     } else {
       await this.fallback.put('sales', { ...before.sale, subtotal, discount, gst_total: gstTotal, grand_total: grandTotal, payment_type: paymentType, status });
       for (const line of lines) {
-        await this.fallback.put('sale_items', { ...line.item, id: line.item.sale_item_id, product_id: line.item.product_id, sale_unit: line.unit, price: line.unitPrice, gst_amount: line.gstAmount, line_total: line.lineTotal });
+        const oldItem = beforeItemsById.get(Number(line.item.id));
+        if (oldItem) {
+          await this.fallback.put('sale_items', { ...oldItem, ...line.item, gst_amount: line.gstAmount, line_total: line.lineTotal });
+          const stockDelta = saleItemStockUsed(oldItem) - saleItemStockUsed(line.item);
+          if (stockDelta) {
+            const product = productMap.get(Number(oldItem.product_id));
+            if (product) {
+              const updatedProduct = { ...product, stock: Math.max(0, Number(product.stock || 0) + stockDelta) };
+              await this.saveProduct(updatedProduct);
+              productMap.set(Number(updatedProduct.id), updatedProduct);
+            }
+          }
+          beforeItemsById.delete(Number(line.item.id));
+        } else {
+          await this.fallback.put('sale_items', { sale_id: Number(id), product_id: line.item.product_id, product_name: line.item.product_name, quantity: line.item.quantity, sale_unit: line.item.sale_unit, price: line.item.price, gst_percent: line.item.gst_percent, gst_amount: line.gstAmount, line_total: line.lineTotal });
+          const product = productMap.get(Number(line.item.product_id));
+          if (product) {
+            const updatedProduct = { ...product, stock: Math.max(0, Number(product.stock || 0) - saleItemStockUsed(line.item)) };
+            await this.saveProduct(updatedProduct);
+            productMap.set(Number(updatedProduct.id), updatedProduct);
+          }
+        }
+      }
+      for (const removed of beforeItemsById.values()) {
+        await this.fallback.delete('sale_items', Number(removed.id));
+        if (removed.product_id) {
+          const product = productMap.get(Number(removed.product_id));
+          if (product) {
+            const updatedProduct = { ...product, stock: Number(product.stock || 0) + saleItemStockUsed(removed) };
+            await this.saveProduct(updatedProduct);
+            productMap.set(Number(updatedProduct.id), updatedProduct);
+          }
+        }
       }
       const payments = (await this.fallback.all('payments')).filter(row => Number(row.sale_id) === Number(id));
       for (const payment of payments) await this.fallback.put('payments', { ...payment, payment_type: paymentType, amount: grandTotal });
