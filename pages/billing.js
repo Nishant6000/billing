@@ -72,6 +72,8 @@ const renderCart = () => {
   }).join('') : `<p class="text-muted text-center py-4">${t('cartEmpty')}</p>`;
   $('#cart-totals').innerHTML = `
     <div class="d-flex justify-content-between"><span>${t('subtotal')}</span><strong>${money(totals.subtotal)}</strong></div>
+    <div class="d-flex justify-content-between"><span>CGST</span><strong>${money(totals.gstTotal / 2)}</strong></div>
+    <div class="d-flex justify-content-between"><span>SGST</span><strong>${money(totals.gstTotal / 2)}</strong></div>
     <div class="d-flex justify-content-between"><span>GST</span><strong>${money(totals.gstTotal)}</strong></div>
     <div class="d-flex justify-content-between"><span>${t('discount')}</span><strong>${money(totals.discount)}</strong></div>
     <hr><div class="d-flex justify-content-between fs-4"><span>${t('total')}</span><strong>${money(totals.grandTotal)}</strong></div>
@@ -700,6 +702,8 @@ const receiptMessage = (settings, invoice, items, totals, customer = {}) => {
     '',
     lines,
     '',
+    `CGST: ${money(totals.gstTotal / 2)}`,
+    `SGST: ${money(totals.gstTotal / 2)}`,
     `GST: ${money(totals.gstTotal)}`,
     `Discount: ${money(totals.discount)}`,
     `Total: ${money(totals.grandTotal)}`,
@@ -710,9 +714,17 @@ const receiptMessage = (settings, invoice, items, totals, customer = {}) => {
 
 const printReceipt = async (invoice, items, totals, customer = {}) => {
   const settings = await db.getSettings();
+  const savedCustomers = customer.customerPhone ? await db.getCustomers(customer.customerPhone) : [];
+  const savedCustomer = savedCustomers.find(row => String(row.mobile || '').trim() === String(customer.customerPhone || '').trim()) || {};
+  const billCustomer = {
+    customerName: customer.customerName || savedCustomer.customer_name || '',
+    customerPhone: customer.customerPhone || savedCustomer.mobile || '',
+    gstin: savedCustomer.gstin || '',
+    address: savedCustomer.address || ''
+  };
   const lines = calculateCartLines(items, totals.discount).map(line => `<tr><td>${escapeHtml(line.item.product_name)}</td><td>${formatQuantity(line.quantity, line.unit)}</td><td class="text-end">${money(line.taxableAfterDiscount)}</td></tr>`).join('');
-  const phone = whatsappNumber(customer.customerPhone);
-  const message = encodeURIComponent(receiptMessage(settings, invoice, items, totals, customer));
+  const phone = whatsappNumber(billCustomer.customerPhone);
+  const message = encodeURIComponent(receiptMessage(settings, invoice, items, totals, billCustomer));
   const whatsappUrl = phone ? `https://wa.me/${phone}?text=${message}` : `https://wa.me/?text=${message}`;
   showModal(`
     <div class="modal-header"><h5 class="modal-title">Receipt</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
@@ -721,9 +733,9 @@ const printReceipt = async (invoice, items, totals, customer = {}) => {
         ${settings.receipt_logo ? `<img class="receipt-logo" src="${escapeHtml(settings.receipt_logo)}" alt="Receipt logo">` : ''}
         <h5 class="text-center">${escapeHtml(settings.receipt_header || settings.shop_name)}</h5>
         <p class="text-center small">${escapeHtml(settings.shop_address)}<br>GSTIN: ${escapeHtml(settings.gstin)}<br>${escapeHtml(settings.phone)}</p>
-        <p>Invoice: ${invoice}<br>Date: ${new Date().toLocaleString()}${customer.customerName ? `<br>Customer: ${escapeHtml(customer.customerName)}` : ''}${customer.customerPhone ? `<br>Mobile: ${escapeHtml(customer.customerPhone)}` : ''}</p>
+        <p>Invoice: ${invoice}<br>Date: ${new Date().toLocaleString()}${billCustomer.customerName ? `<br>Customer: ${escapeHtml(billCustomer.customerName)}` : ''}${billCustomer.customerPhone ? `<br>Mobile: ${escapeHtml(billCustomer.customerPhone)}` : ''}${billCustomer.gstin ? `<br>GSTIN: ${escapeHtml(billCustomer.gstin)}` : ''}${billCustomer.address ? `<br>Address: ${escapeHtml(billCustomer.address)}` : ''}</p>
         <table class="table table-sm"><tbody>${lines}</tbody></table>
-        <p>GST: ${money(totals.gstTotal)}<br>Discount: ${money(totals.discount)}</p>
+        <p>CGST: ${money(totals.gstTotal / 2)}<br>SGST: ${money(totals.gstTotal / 2)}<br>GST: ${money(totals.gstTotal)}<br>Discount: ${money(totals.discount)}</p>
         <h5>Total: ${money(totals.grandTotal)}</h5>
         <div class="border p-3 text-center my-2">QR AREA</div>
         <p class="text-center">${escapeHtml(settings.receipt_footer || settings.footer_text)}</p>

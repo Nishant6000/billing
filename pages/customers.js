@@ -1,7 +1,10 @@
 import { db } from '../js/db.js';
-import { $, debounce, escapeHtml } from '../js/utils.js';
+import { $, debounce, downloadFile, escapeHtml, toCSV } from '../js/utils.js';
 import { closeModal, showModal, toast } from '../js/ui.js';
 import { t } from '../js/i18n.js';
+
+let customerPage = 1;
+let customerPageSize = 10;
 
 const customerRows = (customers = []) => customers.map(customer => {
   const saleOnly = customer.source === 'sale';
@@ -23,9 +26,33 @@ const customerRows = (customers = []) => customers.map(customer => {
 
 const renderCustomerTable = async () => {
   const customers = await db.getCustomers($('#customer-search')?.value || '');
+  const totalPages = Math.max(1, Math.ceil(customers.length / customerPageSize));
+  customerPage = Math.min(Math.max(1, customerPage), totalPages);
+  const start = (customerPage - 1) * customerPageSize;
+  const visibleCustomers = customers.slice(start, start + customerPageSize);
   $('#customers-body').innerHTML = customers.length
-    ? customerRows(customers)
+    ? customerRows(visibleCustomers)
     : `<tr><td colspan="4" class="text-center text-muted py-4">${t('noCustomersFound')}</td></tr>`;
+  $('#customers-page-info').textContent = customers.length
+    ? `${start + 1}-${Math.min(start + customerPageSize, customers.length)} / ${customers.length}`
+    : '0 / 0';
+  $('#customers-prev').disabled = customerPage <= 1;
+  $('#customers-next').disabled = customerPage >= totalPages;
+};
+
+const exportCustomersCsv = async () => {
+  const customers = await db.getCustomers($('#customer-search')?.value || '');
+  const rows = customers.map(customer => ({
+    customer_name: customer.customer_name || '',
+    mobile: customer.mobile || '',
+    gstin: customer.gstin || '',
+    address: customer.address || '',
+    source: customer.source === 'sale' ? 'sales history' : 'customer',
+    created_at: customer.created_at || '',
+    updated_at: customer.updated_at || ''
+  }));
+  downloadFile('customers.csv', toCSV(rows));
+  toast(t('exportCsv'));
 };
 
 const openCustomerModal = (customer = null) => {
@@ -85,19 +112,56 @@ export const renderCustomers = async () => {
           <h2 class="section-title mb-1">${t('customers')}</h2>
           <p class="text-muted mb-0">${t('customersHelp')}</p>
         </div>
-        <button class="btn btn-primary-gradient" id="add-customer" type="button"><i class="fa-solid fa-user-plus"></i> ${t('addCustomer')}</button>
+        <div class="d-flex flex-wrap gap-2">
+          <button class="btn btn-outline-success" id="export-customers" type="button"><i class="fa-solid fa-file-csv"></i> ${t('exportCsv')}</button>
+          <button class="btn btn-primary-gradient" id="add-customer" type="button"><i class="fa-solid fa-user-plus"></i> ${t('addCustomer')}</button>
+        </div>
       </div>
-      <input class="form-control mb-3" id="customer-search" placeholder="${t('searchCustomerMobile')}">
+      <div class="row g-2 mb-3">
+        <div class="col-md-8"><input class="form-control" id="customer-search" placeholder="${t('searchCustomerMobile')}"></div>
+        <div class="col-md-4">
+          <select class="form-select" id="customers-page-size">
+            <option value="10">10 / page</option>
+            <option value="25">25 / page</option>
+            <option value="50">50 / page</option>
+            <option value="100">100 / page</option>
+          </select>
+        </div>
+      </div>
       <div class="table-responsive">
         <table class="table align-middle">
           <thead><tr><th>${t('customer')}</th><th>${t('gstin')}</th><th>${t('address')}</th><th></th></tr></thead>
           <tbody id="customers-body"></tbody>
         </table>
       </div>
+      <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mt-3">
+        <span class="text-muted small" id="customers-page-info">0 / 0</span>
+        <div class="btn-group">
+          <button class="btn btn-outline-secondary" id="customers-prev" type="button"><i class="fa-solid fa-chevron-left"></i></button>
+          <button class="btn btn-outline-secondary" id="customers-next" type="button"><i class="fa-solid fa-chevron-right"></i></button>
+        </div>
+      </div>
     </div>
   `;
   await renderCustomerTable();
-  $('#customer-search').addEventListener('input', debounce(renderCustomerTable));
+  $('#customer-search').addEventListener('input', debounce(() => {
+    customerPage = 1;
+    renderCustomerTable();
+  }));
+  $('#customers-page-size').addEventListener('change', async () => {
+    customerPageSize = Number($('#customers-page-size').value || 10);
+    customerPage = 1;
+    await renderCustomerTable();
+  });
+  $('#customers-prev').addEventListener('click', async () => {
+    customerPage -= 1;
+    await renderCustomerTable();
+  });
+  $('#customers-next').addEventListener('click', async () => {
+    customerPage += 1;
+    await renderCustomerTable();
+  });
+  $('#export-customers').addEventListener('click', exportCustomersCsv);
   $('#add-customer').addEventListener('click', () => openCustomerModal());
   $('#customers-body').addEventListener('click', async (event) => {
     const editId = event.target.closest('[data-edit-customer]')?.dataset.editCustomer;

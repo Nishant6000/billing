@@ -238,10 +238,11 @@ const openModifySale = async (sale) => {
 const showSale = async (sale, shouldPrint = false) => {
   const items = await db.getSaleItems(sale.id);
   const settings = await db.getSettings();
+  const customer = await customerForSale(sale);
   const whatsappUrl = await saleWhatsAppUrl(sale, items);
   const receiptHtml = (settings.printer_theme || 'thermal') === 'desktop'
-    ? desktopInvoiceHtml(settings, sale, items)
-    : thermalReceiptHtml(settings, sale, items);
+    ? desktopInvoiceHtml(settings, sale, items, customer)
+    : thermalReceiptHtml(settings, sale, items, customer);
   showModal(`
     <div class="modal-header"><h5 class="modal-title">${escapeHtml(sale.invoice_no)}</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
     <div class="modal-body">
@@ -261,22 +262,36 @@ const showSale = async (sale, shouldPrint = false) => {
   if (shouldPrint) setTimeout(() => window.print(), 350);
 };
 
-const thermalReceiptHtml = (settings, sale, items) => `
+const customerForSale = async (sale = {}) => {
+  const phone = String(sale.customer_phone || '').trim();
+  const customers = phone ? await db.getCustomers(phone) : [];
+  const customer = customers.find(row => String(row.mobile || '').trim() === phone) || {};
+  return {
+    name: sale.customer_name || customer.customer_name || '',
+    mobile: sale.customer_phone || customer.mobile || '',
+    gstin: customer.gstin || '',
+    address: customer.address || ''
+  };
+};
+
+const thermalReceiptHtml = (settings, sale, items, customer = {}) => `
   <div class="receipt-preview print-area receipt-theme-thermal">
     ${settings.receipt_logo ? `<img class="receipt-logo" src="${escapeHtml(settings.receipt_logo)}" alt="${t('receiptLogo')}">` : ''}
     <h5 class="text-center">${escapeHtml(settings.receipt_header || settings.shop_name || t('receipt'))}</h5>
-    <p>${t('date')}: ${new Date(sale.created_at).toLocaleString()}<br>${t('payment')}: ${escapeHtml(paymentLabel(sale.payment_type))}${sale.customer_name ? `<br>${t('customer')}: ${escapeHtml(sale.customer_name)}` : ''}${sale.customer_phone ? `<br>${t('mobile')}: ${escapeHtml(sale.customer_phone)}` : ''}</p>
+    <p>${t('date')}: ${new Date(sale.created_at).toLocaleString()}<br>${t('payment')}: ${escapeHtml(paymentLabel(sale.payment_type))}${customer.name ? `<br>${t('customer')}: ${escapeHtml(customer.name)}` : ''}${customer.mobile ? `<br>${t('mobile')}: ${escapeHtml(customer.mobile)}` : ''}${customer.gstin ? `<br>${t('gstin')}: ${escapeHtml(customer.gstin)}` : ''}${customer.address ? `<br>${t('address')}: ${escapeHtml(customer.address)}` : ''}</p>
     <table class="table table-sm"><tbody>${items.map(item => `<tr><td>${escapeHtml(item.product_name)}</td><td>${formatQuantity(item.quantity, item.sale_unit || 'Piece')}</td><td class="text-end">${money(item.line_total)}</td></tr>`).join('')}</tbody></table>
-    <p>GST: ${money(sale.gst_total)}<br>${t('discount')}: ${money(sale.discount)}</p>
+    <p>CGST: ${money(Number(sale.gst_total || 0) / 2)}<br>SGST: ${money(Number(sale.gst_total || 0) / 2)}<br>GST: ${money(sale.gst_total)}<br>${t('discount')}: ${money(sale.discount)}</p>
     <h5>${t('total')}: ${money(sale.grand_total)}</h5>
     <p class="text-center">${escapeHtml(settings.receipt_footer || settings.footer_text || '')}</p>
   </div>
 `;
 
-const desktopInvoiceHtml = (settings, sale, items) => {
+const desktopInvoiceHtml = (settings, sale, items, customer = {}) => {
   const subtotal = Number(sale.subtotal || 0);
   const discount = Number(sale.discount || 0);
   const gst = Number(sale.gst_total || 0);
+  const cgst = gst / 2;
+  const sgst = gst / 2;
   const total = Number(sale.grand_total || 0);
   return `
     <div class="receipt-preview print-area receipt-theme-desktop tally-invoice">
@@ -292,8 +307,10 @@ const desktopInvoiceHtml = (settings, sale, items) => {
       <div class="tally-info-grid">
         <div>
           <strong>${t('billTo')}</strong>
-          <p>${escapeHtml(sale.customer_name || t('walkInCustomer'))}</p>
-          <p>${t('mobile')}: ${escapeHtml(sale.customer_phone || '-')}</p>
+          <p>${escapeHtml(customer.name || t('walkInCustomer'))}</p>
+          <p>${t('mobile')}: ${escapeHtml(customer.mobile || '-')}</p>
+          <p>${t('gstin')}: ${escapeHtml(customer.gstin || '-')}</p>
+          <p>${t('address')}: ${escapeHtml(customer.address || '-')}</p>
         </div>
         <div>
           <p><strong>${t('invoiceNo')}:</strong> ${escapeHtml(sale.invoice_no)}</p>
@@ -303,7 +320,7 @@ const desktopInvoiceHtml = (settings, sale, items) => {
       </div>
       <table class="tally-items">
         <thead>
-          <tr><th>${t('sl')}</th><th>${t('particulars')}</th><th>${t('qty')}</th><th>${t('rate')}</th><th>GST %</th><th class="text-end">${t('amount')}</th></tr>
+          <tr><th>${t('sl')}</th><th>${t('particulars')}</th><th>${t('qty')}</th><th>${t('rate')}</th><th>CGST %</th><th>SGST %</th><th class="text-end">${t('amount')}</th></tr>
         </thead>
         <tbody>
           ${items.map((item, index) => `
@@ -312,7 +329,8 @@ const desktopInvoiceHtml = (settings, sale, items) => {
               <td>${escapeHtml(item.product_name)}</td>
               <td>${escapeHtml(formatQuantity(item.quantity, item.sale_unit || 'Piece'))}</td>
               <td>${money(item.price)}</td>
-              <td>${Number(item.gst_percent || 0).toFixed(2)}</td>
+              <td>${(Number(item.gst_percent || 0) / 2).toFixed(2)}</td>
+              <td>${(Number(item.gst_percent || 0) / 2).toFixed(2)}</td>
               <td class="text-end">${money(item.line_total)}</td>
             </tr>
           `).join('')}
@@ -326,6 +344,8 @@ const desktopInvoiceHtml = (settings, sale, items) => {
         <table class="tally-totals">
           <tr><td>${t('subtotal')}</td><td>${money(subtotal)}</td></tr>
           <tr><td>${t('discount')}</td><td>${money(discount)}</td></tr>
+          <tr><td>CGST</td><td>${money(cgst)}</td></tr>
+          <tr><td>SGST</td><td>${money(sgst)}</td></tr>
           <tr><td>GST</td><td>${money(gst)}</td></tr>
           <tr class="grand"><td>${t('grandTotal')}</td><td>${money(total)}</td></tr>
         </table>
