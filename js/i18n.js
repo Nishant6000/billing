@@ -8,6 +8,7 @@ const dictionaries = {
     'route.purchase': 'Purchase Entry',
     'route.purchase-history': 'Purchase History',
     'route.sales': 'Sales',
+    'route.customers': 'Customers',
     'route.whatsapp-marketing': 'WhatsApp Marketing',
     'route.reports': 'Reports',
     'route.gst-export': 'GST Export',
@@ -68,6 +69,7 @@ const dictionaries = {
     'route.purchase': 'खरीद एंट्री',
     'route.purchase-history': 'खरीद इतिहास',
     'route.sales': 'बिक्री',
+    'route.customers': 'ग्राहक',
     'route.whatsapp-marketing': 'व्हाट्सऐप मार्केटिंग',
     'route.reports': 'रिपोर्ट',
     'route.gst-export': 'GST एक्सपोर्ट',
@@ -128,6 +130,7 @@ const dictionaries = {
     'route.purchase': 'கொள்முதல் பதிவு',
     'route.purchase-history': 'கொள்முதல் வரலாறு',
     'route.sales': 'விற்பனை',
+    'route.customers': 'வாடிக்கையாளர்கள்',
     'route.whatsapp-marketing': 'WhatsApp மார்க்கெட்டிங்',
     'route.reports': 'அறிக்கைகள்',
     'route.gst-export': 'GST ஏற்றுமதி',
@@ -172,6 +175,7 @@ const dictionaries = {
     'route.purchase': 'కొనుగోలు నమోదు',
     'route.purchase-history': 'కొనుగోలు చరిత్ర',
     'route.sales': 'అమ్మకాలు',
+    'route.customers': 'కస్టమర్లు',
     'route.whatsapp-marketing': 'WhatsApp మార్కెటింగ్',
     'route.reports': 'రిపోర్టులు',
     'route.gst-export': 'GST ఎగుమతి',
@@ -201,6 +205,7 @@ const dictionaries = {
     'route.purchase': 'खरेदी एंट्री',
     'route.purchase-history': 'खरेदी इतिहास',
     'route.sales': 'विक्री',
+    'route.customers': 'ग्राहक',
     'route.whatsapp-marketing': 'WhatsApp मार्केटिंग',
     'route.reports': 'रिपोर्ट',
     'route.gst-export': 'GST एक्सपोर्ट',
@@ -230,6 +235,7 @@ const dictionaries = {
     'route.purchase': 'പർച്ചേസ് എൻട്രി',
     'route.purchase-history': 'പർച്ചേസ് ചരിത്രം',
     'route.sales': 'സെയിൽസ്',
+    'route.customers': 'കസ്റ്റമർമാർ',
     'route.whatsapp-marketing': 'WhatsApp മാർക്കറ്റിംഗ്',
     'route.reports': 'റിപ്പോർട്ടുകൾ',
     'route.gst-export': 'GST എക്സ്പോർട്ട്',
@@ -259,6 +265,7 @@ const dictionaries = {
     'route.purchase': 'ಖರೀದಿ ಎಂಟ್ರಿ',
     'route.purchase-history': 'ಖರೀದಿ ಇತಿಹಾಸ',
     'route.sales': 'ಮಾರಾಟ',
+    'route.customers': 'ಗ್ರಾಹಕರು',
     'route.whatsapp-marketing': 'WhatsApp ಮಾರ್ಕೆಟಿಂಗ್',
     'route.reports': 'ರಿಪೋರ್ಟ್‌ಗಳು',
     'route.gst-export': 'GST ಎಕ್ಸ್‌ಪೋರ್ಟ್',
@@ -716,6 +723,116 @@ const whatsappMarketingLabels = {
 };
 
 Object.entries(whatsappMarketingLabels).forEach(([language, labels]) => Object.assign(dictionaries[language], labels));
+
+const customerLabels = {
+  en: {
+    customersHelp: 'Save customer details for billing, GST invoices, and WhatsApp sharing.',
+    addCustomer: 'Add Customer',
+    editCustomer: 'Edit Customer',
+    saveCustomer: 'Save Customer',
+    customerSaved: 'Customer saved',
+    customerDeleted: 'Customer deleted',
+    confirmDeleteCustomer: 'Delete this customer?',
+    noCustomersFound: 'No customers found.',
+    edit: 'Edit',
+    delete: 'Delete',
+    selectCustomer: 'Select Customer',
+    searchSavedCustomer: 'Search saved customer',
+    walkInManualEntry: 'Walk-in / manual entry'
+  },
+  hi: {
+    customersHelp: 'Billing, GST invoice और WhatsApp sharing के लिए ग्राहक विवरण सेव करें।',
+    addCustomer: 'ग्राहक जोड़ें',
+    editCustomer: 'ग्राहक संपादित करें',
+    saveCustomer: 'ग्राहक सेव करें',
+    customerSaved: 'ग्राहक सेव हुआ',
+    customerDeleted: 'ग्राहक हटाया गया',
+    confirmDeleteCustomer: 'क्या यह ग्राहक हटाना है?',
+    noCustomersFound: 'कोई ग्राहक नहीं मिला।',
+    edit: 'संपादित करें',
+    delete: 'हटाएं',
+    selectCustomer: 'ग्राहक चुनें',
+    searchSavedCustomer: 'सेव ग्राहक खोजें',
+    walkInManualEntry: 'Walk-in / manual entry'
+  },
+  ta: {
+    customersHelp: 'Billing, GST invoice, WhatsApp sharing க்கான வாடிக்கையாளர் விவரங்களை சேமிக்கவும்.',
+    addCustomer: 'வாடிக்கையாளர் சேர்க்க',
+    editCustomer: 'வாடிக்கையாளர் திருத்து',
+    saveCustomer: 'வாடிக்கையாளர் சேமி',
+    customerSaved: 'வாடிக்கையாளர் சேமிக்கப்பட்டார்',
+    customerDeleted: 'வாடிக்கையாளர் நீக்கப்பட்டார்',
+    confirmDeleteCustomer: 'இந்த வாடிக்கையாளரை நீக்கவா?',
+    noCustomersFound: 'வாடிக்கையாளர்கள் இல்லை.',
+    edit: 'திருத்து',
+    delete: 'நீக்கு',
+    selectCustomer: 'வாடிக்கையாளர் தேர்வு',
+    searchSavedCustomer: 'சேமித்த வாடிக்கையாளர் தேடவும்',
+    walkInManualEntry: 'Walk-in / manual entry'
+  },
+  te: {
+    customersHelp: 'Billing, GST invoice మరియు WhatsApp sharing కోసం కస్టమర్ వివరాలు సేవ్ చేయండి.',
+    addCustomer: 'కస్టమర్ జోడించండి',
+    editCustomer: 'కస్టమర్ సవరించండి',
+    saveCustomer: 'కస్టమర్ సేవ్ చేయండి',
+    customerSaved: 'కస్టమర్ సేవ్ అయ్యాడు',
+    customerDeleted: 'కస్టమర్ తొలగించబడింది',
+    confirmDeleteCustomer: 'ఈ కస్టమర్‌ను తొలగించాలా?',
+    noCustomersFound: 'కస్టమర్లు లేరు.',
+    edit: 'సవరించండి',
+    delete: 'తొలగించండి',
+    selectCustomer: 'కస్టమర్ ఎంచుకోండి',
+    searchSavedCustomer: 'సేవ్ చేసిన కస్టమర్ వెతకండి',
+    walkInManualEntry: 'Walk-in / manual entry'
+  },
+  mr: {
+    customersHelp: 'Billing, GST invoice आणि WhatsApp sharing साठी ग्राहक तपशील सेव्ह करा.',
+    addCustomer: 'ग्राहक जोडा',
+    editCustomer: 'ग्राहक एडिट करा',
+    saveCustomer: 'ग्राहक सेव्ह करा',
+    customerSaved: 'ग्राहक सेव्ह झाला',
+    customerDeleted: 'ग्राहक डिलीट झाला',
+    confirmDeleteCustomer: 'हा ग्राहक डिलीट करायचा का?',
+    noCustomersFound: 'ग्राहक सापडले नाहीत.',
+    edit: 'एडिट',
+    delete: 'डिलीट',
+    selectCustomer: 'ग्राहक निवडा',
+    searchSavedCustomer: 'सेव्ह ग्राहक शोधा',
+    walkInManualEntry: 'Walk-in / manual entry'
+  },
+  ml: {
+    customersHelp: 'Billing, GST invoice, WhatsApp sharing എന്നിവയ്ക്ക് കസ്റ്റമർ വിവരങ്ങൾ സേവ് ചെയ്യുക.',
+    addCustomer: 'കസ്റ്റമർ ചേർക്കുക',
+    editCustomer: 'കസ്റ്റമർ തിരുത്തുക',
+    saveCustomer: 'കസ്റ്റമർ സേവ് ചെയ്യുക',
+    customerSaved: 'കസ്റ്റമർ സേവ് ചെയ്തു',
+    customerDeleted: 'കസ്റ്റമർ ഡിലീറ്റ് ചെയ്തു',
+    confirmDeleteCustomer: 'ഈ കസ്റ്റമറെ ഡിലീറ്റ് ചെയ്യണോ?',
+    noCustomersFound: 'കസ്റ്റമർമാർ കണ്ടെത്തിയില്ല.',
+    edit: 'തിരുത്തുക',
+    delete: 'ഡിലീറ്റ്',
+    selectCustomer: 'കസ്റ്റമർ തിരഞ്ഞെടുക്കുക',
+    searchSavedCustomer: 'സേവ് ചെയ്ത കസ്റ്റമർ തിരയുക',
+    walkInManualEntry: 'Walk-in / manual entry'
+  },
+  kn: {
+    customersHelp: 'Billing, GST invoice ಮತ್ತು WhatsApp sharing ಗಾಗಿ ಗ್ರಾಹಕ ವಿವರಗಳನ್ನು ಉಳಿಸಿ.',
+    addCustomer: 'ಗ್ರಾಹಕ ಸೇರಿಸಿ',
+    editCustomer: 'ಗ್ರಾಹಕ ತಿದ್ದುಪಡಿ',
+    saveCustomer: 'ಗ್ರಾಹಕ ಉಳಿಸಿ',
+    customerSaved: 'ಗ್ರಾಹಕ ಉಳಿಸಲಾಗಿದೆ',
+    customerDeleted: 'ಗ್ರಾಹಕ ಅಳಿಸಲಾಗಿದೆ',
+    confirmDeleteCustomer: 'ಈ ಗ್ರಾಹಕ ಅಳಿಸಬೇಕೇ?',
+    noCustomersFound: 'ಗ್ರಾಹಕರು ಸಿಕ್ಕಿಲ್ಲ.',
+    edit: 'ತಿದ್ದುಪಡಿ',
+    delete: 'ಅಳಿಸಿ',
+    selectCustomer: 'ಗ್ರಾಹಕ ಆಯ್ಕೆಮಾಡಿ',
+    searchSavedCustomer: 'ಉಳಿಸಿದ ಗ್ರಾಹಕ ಹುಡುಕಿ',
+    walkInManualEntry: 'Walk-in / manual entry'
+  }
+};
+
+Object.entries(customerLabels).forEach(([language, labels]) => Object.assign(dictionaries[language], labels));
 
 const reportLabels = {
   en: {

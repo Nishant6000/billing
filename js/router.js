@@ -9,6 +9,7 @@ import { renderTables } from '../pages/tables.js';
 import { renderProducts } from '../pages/products.js';
 import { renderPurchaseEntry, renderPurchaseHistory } from '../pages/purchase.js';
 import { renderSales } from '../pages/sales.js';
+import { renderCustomers } from '../pages/customers.js';
 import { renderWhatsappMarketing } from '../pages/whatsapp-marketing.js';
 import { renderReports } from '../pages/reports.js';
 import { renderGstExport } from '../pages/gst-export.js';
@@ -26,6 +27,7 @@ const routes = {
   purchase: renderPurchaseEntry,
   'purchase-history': renderPurchaseHistory,
   sales: renderSales,
+  customers: renderCustomers,
   'whatsapp-marketing': renderWhatsappMarketing,
   reports: renderReports,
   'gst-export': renderGstExport,

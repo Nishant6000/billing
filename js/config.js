@@ -1,6 +1,6 @@
 export const APP_CONFIG = {
   dbName: 'offline_pos_db',
-  dbVersion: 8,
+  dbVersion: 9,
   currency: '₹',
   invoicePrefix: 'INV',
   routes: [
@@ -11,6 +11,7 @@ export const APP_CONFIG = {
     { id: 'purchase', title: 'Purchase Entry', icon: 'fa-truck-ramp-box' },
     { id: 'purchase-history', title: 'Purchase History', icon: 'fa-clipboard-list' },
     { id: 'sales', title: 'Sales', icon: 'fa-receipt' },
+    { id: 'customers', title: 'Customers', icon: 'fa-users' },
     { id: 'whatsapp-marketing', title: 'WhatsApp Marketing', icon: 'fa-brands fa-whatsapp' },
     { id: 'reports', title: 'Reports', icon: 'fa-chart-line' },
     { id: 'gst-export', title: 'GST Export', icon: 'fa-file-export' },
@@ -22,10 +23,10 @@ export const APP_CONFIG = {
   roles: ['Owner', 'Manager', 'Cashier', 'Inventory', 'Accountant'],
   roleAccess: {
     Owner: ['*'],
-    Manager: ['dashboard', 'billing', 'tables', 'products', 'purchase', 'purchase-history', 'sales', 'whatsapp-marketing', 'reports', 'gst-export', 'printer', 'barcode', 'backup'],
-    Cashier: ['dashboard', 'billing', 'tables', 'sales', 'barcode'],
+    Manager: ['dashboard', 'billing', 'tables', 'products', 'purchase', 'purchase-history', 'sales', 'customers', 'whatsapp-marketing', 'reports', 'gst-export', 'printer', 'barcode', 'backup'],
+    Cashier: ['dashboard', 'billing', 'tables', 'sales', 'customers', 'barcode'],
     Inventory: ['dashboard', 'products', 'purchase', 'purchase-history', 'barcode', 'backup'],
-    Accountant: ['dashboard', 'sales', 'purchase-history', 'reports', 'gst-export', 'backup']
+    Accountant: ['dashboard', 'sales', 'customers', 'purchase-history', 'reports', 'gst-export', 'backup']
   },
   defaultSettings: {
     shop_name: 'Ginsoft POS Store',

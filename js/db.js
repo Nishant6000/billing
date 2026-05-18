@@ -11,7 +11,7 @@ class IndexedDBFallback {
       const request = indexedDB.open(APP_CONFIG.dbName, APP_CONFIG.dbVersion);
       request.onupgradeneeded = () => {
         const db = request.result;
-        ['categories', 'products', 'sales', 'sale_items', 'payments', 'users', 'hold_bills', 'settings', 'bill_audit', 'purchases', 'purchase_items', 'dining_tables', 'table_orders', 'table_order_items', 'kot_tickets', 'kot_items'].forEach(store => {
+        ['categories', 'products', 'sales', 'sale_items', 'payments', 'customers', 'users', 'hold_bills', 'settings', 'bill_audit', 'purchases', 'purchase_items', 'dining_tables', 'table_orders', 'table_order_items', 'kot_tickets', 'kot_items'].forEach(store => {
           if (!db.objectStoreNames.contains(store)) db.createObjectStore(store, { keyPath: store === 'settings' ? 'key' : 'id', autoIncrement: store !== 'settings' });
         });
       };
@@ -68,6 +68,7 @@ const BACKUP_TABLES = [
   'sales',
   'sale_items',
   'payments',
+  'customers',
   'users',
   'dining_tables',
   'table_orders',
@@ -91,6 +92,7 @@ const RESTORE_DELETE_ORDER = [
   'bill_audit',
   'hold_bills',
   'payments',
+  'customers',
   'users',
   'sale_items',
   'sales',
@@ -183,6 +185,7 @@ class POSDatabase {
       )
     `);
     await this.ensureRestaurantTables();
+    await this.ensureCustomersTable();
     await this.ensureUsersTable();
     await this.ensureProductColumns();
     await this.ensureSalesColumns();
@@ -252,6 +255,20 @@ class POSDatabase {
     for (const user of users.filter(item => !item.user_id)) {
       await this.run('UPDATE users SET user_id=? WHERE id=?', [this.userIdFromName(user.full_name || `user${user.id}`), user.id]);
     }
+  }
+
+  async ensureCustomersTable() {
+    await this.run(`
+      CREATE TABLE IF NOT EXISTS customers (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        customer_name TEXT NOT NULL,
+        mobile TEXT NOT NULL,
+        gstin TEXT,
+        address TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )
+    `);
   }
 
   async ensureRestaurantTables() {
@@ -401,6 +418,71 @@ class POSDatabase {
   async saveSetting(key, value) {
     if (this.mode === 'sqlite') return await this.run('INSERT OR REPLACE INTO settings(key, value) VALUES(?, ?)', [key, String(value ?? '')]);
     return await this.fallback.put('settings', { key, value: String(value ?? '') });
+  }
+
+  async getCustomers(search = '') {
+    const rows = await this.getCustomerRows();
+    const sales = await this.getSales();
+    const byMobile = new Map();
+    rows.forEach(row => {
+      if (row.mobile) byMobile.set(String(row.mobile), row);
+    });
+    sales
+      .filter(sale => sale.customer_name && sale.customer_phone)
+      .forEach(sale => {
+        const mobile = String(sale.customer_phone || '').trim();
+        if (!mobile || byMobile.has(mobile)) return;
+        byMobile.set(mobile, {
+          id: `sale-${sale.id}`,
+          customer_name: sale.customer_name,
+          mobile,
+          gstin: '',
+          address: '',
+          created_at: sale.created_at,
+          updated_at: sale.created_at,
+          source: 'sale'
+        });
+      });
+    const term = String(search || '').trim().toLowerCase();
+    return [...byMobile.values()]
+      .sort((a, b) => String(a.customer_name || '').localeCompare(String(b.customer_name || '')))
+      .filter(row => !term || `${row.customer_name || ''} ${row.mobile || ''} ${row.gstin || ''}`.toLowerCase().includes(term));
+  }
+
+  async getCustomerRows() {
+    return this.mode === 'sqlite'
+      ? await this.query('SELECT * FROM customers ORDER BY customer_name')
+      : await this.fallback.all('customers');
+  }
+
+  async saveCustomer(customer = {}) {
+    const now = todayISO();
+    const row = {
+      ...customer,
+      customer_name: String(customer.customer_name || '').trim(),
+      mobile: String(customer.mobile || '').trim(),
+      gstin: String(customer.gstin || '').trim(),
+      address: String(customer.address || '').trim(),
+      updated_at: now
+    };
+    if (!row.customer_name) throw new Error('Customer name is required');
+    if (!row.mobile) throw new Error('Mobile number is required');
+    if (!row.id) {
+      const existing = (await this.getCustomerRows()).find(item => String(item.mobile || '') === row.mobile);
+      if (existing) row.id = existing.id;
+    }
+    if (this.mode === 'sqlite') {
+      if (row.id) {
+        return await this.run('UPDATE customers SET customer_name=?, mobile=?, gstin=?, address=?, updated_at=? WHERE id=?', [row.customer_name, row.mobile, row.gstin, row.address, row.updated_at, row.id]);
+      }
+      return await this.run('INSERT INTO customers(customer_name, mobile, gstin, address, created_at, updated_at) VALUES(?, ?, ?, ?, ?, ?)', [row.customer_name, row.mobile, row.gstin, row.address, now, now]);
+    }
+    return await this.fallback.put('customers', { ...row, created_at: row.created_at || now });
+  }
+
+  async deleteCustomer(id) {
+    if (this.mode === 'sqlite') return await this.run('DELETE FROM customers WHERE id=?', [id]);
+    return await this.fallback.delete('customers', Number(id));
   }
 
   async hashPin(pin) {

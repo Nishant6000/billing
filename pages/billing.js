@@ -515,12 +515,24 @@ const addBarcodeToCurrentBill = async (code) => {
 const openPayment = async (options = {}) => {
   if (!cart.length) return toast(t('cartEmpty'), 'warning');
   const totals = calculateCart(cart, Number($('#discount').value || 0));
+  const customers = await db.getCustomers();
   showModal(`
     <div class="modal-header"><h5 class="modal-title">${t('payment')}</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
     <div class="modal-body">
       <p class="text-muted mb-1">Amount Payable</p>
       <h3 class="fw-black mb-3">${money(totals.grandTotal)}</h3>
       <div class="row g-3 mb-2">
+        <div class="col-12">
+          <label class="form-label">${t('selectCustomer')}</label>
+          <div class="position-relative mb-2">
+            <input class="form-control" id="sale-customer-search" placeholder="${t('searchSavedCustomer')}" autocomplete="off">
+            <div class="customer-suggest-box d-none" id="sale-customer-suggestions"></div>
+          </div>
+          <select class="form-select" id="sale-customer-select">
+            <option value="">${t('walkInManualEntry')}</option>
+            ${customers.map(customer => `<option value="${customer.id}">${escapeHtml(customer.customer_name)} - ${escapeHtml(customer.mobile)}</option>`).join('')}
+          </select>
+        </div>
         <div class="col-md-6">
           <label class="form-label">${t('customerName')}</label>
           <input class="form-control" id="customer-name" placeholder="${t('optional')}">
@@ -556,6 +568,69 @@ const openPayment = async (options = {}) => {
 
   $('#payment-type').addEventListener('change', updateCashFields);
   $('#cash-received').addEventListener('input', updateCashFields);
+  const customerOptionHtml = (customerList = []) => `
+    <option value="">${t('walkInManualEntry')}</option>
+    ${customerList
+      .map(customer => `<option value="${customer.id}">${escapeHtml(customer.customer_name)} - ${escapeHtml(customer.mobile)}</option>`)
+      .join('')}
+  `;
+  const customerSuggestionHtml = (customerList = []) => customerList.length
+    ? customerList.slice(0, 8).map(customer => `
+      <button class="customer-suggest-item" type="button" data-customer-id="${customer.id}">
+        <span>
+          <strong>${escapeHtml(customer.customer_name)}</strong>
+          <small>${escapeHtml(customer.mobile || '')}</small>
+        </span>
+        ${customer.gstin ? `<em>${escapeHtml(customer.gstin)}</em>` : ''}
+      </button>
+    `).join('')
+    : `<div class="customer-suggest-empty">${t('noCustomersFound')}</div>`;
+  const applySelectedCustomer = () => {
+    const customer = customers.find(row => String(row.id) === String($('#sale-customer-select').value));
+    if (!customer) {
+      $('#customer-name').value = '';
+      $('#customer-phone').value = '';
+      return;
+    }
+    $('#customer-name').value = customer.customer_name || '';
+    $('#customer-phone').value = customer.mobile || '';
+  };
+  const selectCustomer = (id) => {
+    $('#sale-customer-select').value = String(id || '');
+    applySelectedCustomer();
+    const customer = customers.find(row => String(row.id) === String(id));
+    if (customer) $('#sale-customer-search').value = `${customer.customer_name || ''} ${customer.mobile || ''}`.trim();
+    $('#sale-customer-suggestions').classList.add('d-none');
+  };
+  const renderCustomerSuggestions = (customerList = []) => {
+    $('#sale-customer-suggestions').innerHTML = customerSuggestionHtml(customerList);
+    $('#sale-customer-suggestions').classList.remove('d-none');
+  };
+  $('#sale-customer-search').addEventListener('input', () => {
+    const term = $('#sale-customer-search').value.trim().toLowerCase();
+    const filteredCustomers = customers
+      .filter(customer => `${customer.customer_name || ''} ${customer.mobile || ''} ${customer.gstin || ''}`.toLowerCase().includes(term));
+    $('#sale-customer-select').innerHTML = customerOptionHtml(filteredCustomers);
+    renderCustomerSuggestions(term ? filteredCustomers : customers);
+    if (term && filteredCustomers.length) {
+      $('#sale-customer-select').value = String(filteredCustomers[0].id);
+      applySelectedCustomer();
+    } else {
+      $('#sale-customer-select').value = '';
+      applySelectedCustomer();
+    }
+  });
+  $('#sale-customer-search').addEventListener('focus', () => renderCustomerSuggestions(customers));
+  $('#sale-customer-suggestions').addEventListener('click', (event) => {
+    const customerId = event.target.closest('[data-customer-id]')?.dataset.customerId;
+    if (customerId) selectCustomer(customerId);
+  });
+  $('#sale-customer-select').addEventListener('change', () => {
+    applySelectedCustomer();
+    const customer = customers.find(row => String(row.id) === String($('#sale-customer-select').value));
+    $('#sale-customer-search').value = customer ? `${customer.customer_name || ''} ${customer.mobile || ''}`.trim() : '';
+    $('#sale-customer-suggestions').classList.add('d-none');
+  });
   updateCashFields();
 
   $('#complete-sale').addEventListener('click', async () => {
@@ -568,6 +643,9 @@ const openPayment = async (options = {}) => {
     const invoice = await db.nextInvoice();
     const customerName = $('#customer-name').value.trim();
     const customerPhone = $('#customer-phone').value.trim();
+    if (customerName && customerPhone) {
+      await db.saveCustomer({ customer_name: customerName, mobile: customerPhone });
+    }
     await db.saveSale({ invoice_no: invoice, items: cart, subtotal: totals.subtotal, discount: totals.discount, gstTotal: totals.gstTotal, grandTotal: totals.grandTotal, paymentType, referenceNo: $('#payment-ref').value, customerName, customerPhone, user: getCurrentUser() });
     if (options.closeRestaurantOrder && activeRestaurantContext) {
       await db.closeTableOrdersForContext(activeRestaurantContext);

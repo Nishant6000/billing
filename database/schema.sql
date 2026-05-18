@@ -73,6 +73,16 @@ CREATE TABLE IF NOT EXISTS payments (
   FOREIGN KEY (sale_id) REFERENCES sales(id)
 );
 
+CREATE TABLE IF NOT EXISTS customers (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  customer_name TEXT NOT NULL,
+  mobile TEXT NOT NULL,
+  gstin TEXT,
+  address TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS users (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id TEXT NOT NULL UNIQUE,
