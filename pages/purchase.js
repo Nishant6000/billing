@@ -134,16 +134,28 @@ const renderPurchaseTotals = () => {
 
 const savePurchase = async (event) => {
   event.preventDefault();
-  const form = Object.fromEntries(new FormData(event.currentTarget).entries());
+  const formElement = event.currentTarget;
+  const submitButton = formElement.querySelector('button[type="submit"], button:not([type])');
+  if (submitButton) submitButton.disabled = true;
+  const form = Object.fromEntries(new FormData(formElement).entries());
   const items = purchaseItems.filter(item => item.item_name.trim() && Number(item.taxable_value || 0) >= 0);
-  if (!items.length) return toast('Add at least one purchase item', 'warning');
-  await db.savePurchase({ ...form, items });
-  purchaseItems = [blankItem()];
-  event.currentTarget.reset();
-  event.currentTarget.bill_date.value = dateOnly();
-  renderPurchaseItems();
-  toast('Purchase bill saved');
-  location.hash = '#/purchase-history';
+  if (!items.length) {
+    if (submitButton) submitButton.disabled = false;
+    return toast('Add at least one purchase item', 'warning');
+  }
+  try {
+    await db.savePurchase({ ...form, items });
+    purchaseItems = [blankItem()];
+    formElement.reset();
+    formElement.bill_date.value = dateOnly();
+    toast('Purchase bill saved');
+    history.replaceState(null, '', '#/purchase-history');
+    document.querySelectorAll('.nav-link-pos').forEach(link => link.classList.toggle('active', link.dataset.route === 'purchase-history'));
+    await renderPurchaseHistory();
+  } catch (error) {
+    toast(error.message || 'Unable to save purchase bill', 'danger');
+    if (submitButton) submitButton.disabled = false;
+  }
 };
 
 const renderPurchaseRows = async () => {

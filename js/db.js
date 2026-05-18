@@ -469,7 +469,10 @@ class POSDatabase {
     if (!row.mobile) throw new Error('Mobile number is required');
     if (!row.id) {
       const existing = (await this.getCustomerRows()).find(item => String(item.mobile || '') === row.mobile);
-      if (existing) row.id = existing.id;
+      if (existing) throw new Error('Phone number already exists');
+    } else {
+      const duplicate = (await this.getCustomerRows()).find(item => String(item.mobile || '') === row.mobile && String(item.id) !== String(row.id));
+      if (duplicate) throw new Error('Phone number already exists');
     }
     if (this.mode === 'sqlite') {
       if (row.id) {
