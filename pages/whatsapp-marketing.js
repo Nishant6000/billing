@@ -32,13 +32,13 @@ const uniqueContacts = (rows) => {
 };
 
 const loadCustomers = async () => {
-  const sales = await db.getSales();
-  contacts = uniqueContacts(sales
-    .filter(sale => sale.customer_phone)
-    .map(sale => ({
-      name: sale.customer_name || t('customer'),
-      phone: sale.customer_phone,
-      source: `${t('bill')} ${sale.invoice_no}`
+  const customers = await db.getCustomers();
+  contacts = uniqueContacts(customers
+    .filter(customer => customer.mobile)
+    .map(customer => ({
+      name: customer.customer_name || t('customer'),
+      phone: customer.mobile,
+      source: customer.source === 'sale' ? t('route.sales') : t('customer')
     })));
   selectedPhones = new Set(contacts.map(contact => contact.phone));
 };

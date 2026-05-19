@@ -1,5 +1,5 @@
 import { db } from '../js/db.js';
-import { $, dateOnly, downloadFile, money, toCSV } from '../js/utils.js';
+import { $, dateOnly, downloadFile, money, toCSV, toXLSX } from '../js/utils.js';
 import { toast } from '../js/ui.js';
 import { t } from '../js/i18n.js';
 
@@ -22,7 +22,7 @@ export const renderGstExport = async () => {
   $('#gst-from').addEventListener('input', renderSummary);
   $('#gst-to').addEventListener('input', renderSummary);
   $('#gst-csv').addEventListener('click', () => exportGst('csv'));
-  $('#gst-xls').addEventListener('click', () => exportGst('xls'));
+  $('#gst-xls').addEventListener('click', () => exportGst('xlsx'));
 };
 
 const gstRows = async () => {
@@ -75,7 +75,10 @@ const renderSummary = async () => {
 
 const exportGst = async (type) => {
   const rows = await gstRows();
-  const csv = toCSV(rows);
-  downloadFile(type === 'csv' ? 'gst-ca-report.csv' : 'gst-ca-report.xls', csv, type === 'csv' ? 'text/csv' : 'application/vnd.ms-excel');
+  if (type === 'xlsx') {
+    downloadFile('gst-ca-report.xlsx', toXLSX(rows, 'GST CA Report'), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  } else {
+    downloadFile('gst-ca-report.csv', toCSV(rows), 'text/csv');
+  }
   toast(t('gstReportDownloaded'));
 };

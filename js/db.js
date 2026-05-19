@@ -755,14 +755,31 @@ class POSDatabase {
     const rows = this.mode === 'sqlite'
       ? await this.query('SELECT * FROM table_order_items WHERE order_id=?', [orderId])
       : await this.fallback.all('table_order_items');
-    return rows
+    const items = rows
       .filter(row => Number(row.order_id) === Number(orderId))
       .map(row => ({ ...JSON.parse(row.item_json || '{}'), quantity: Number(row.quantity), sale_unit: row.sale_unit || 'Piece' }));
+    return this.mergeOrderItems(items);
+  }
+
+  mergeOrderItems(items = []) {
+    const map = new Map();
+    items.forEach(item => {
+      const unit = item.sale_unit || item.base_unit || 'Piece';
+      const key = `${Number(item.id || item.product_id || 0)}|${unit}`;
+      const existing = map.get(key);
+      if (existing) {
+        existing.quantity = Number(existing.quantity || 0) + Number(item.quantity || 0);
+        return;
+      }
+      map.set(key, { ...item, sale_unit: unit, quantity: Number(item.quantity || 0) });
+    });
+    return [...map.values()].filter(item => Number(item.quantity || 0) > 0);
   }
 
   async saveTableOrder({ tableId = null, orderType = 'table', items = [], note = '', user = null }) {
     const now = todayISO();
     const actor = this.actorFromUser(user);
+    const mergedItems = this.mergeOrderItems(items);
     let order = orderType === 'table' ? await this.getActiveTableOrder(tableId) : await this.getActiveTableOrder(null, orderType);
     if (this.mode === 'sqlite') {
       if (!order) {
@@ -775,7 +792,7 @@ class POSDatabase {
         await this.run('UPDATE table_orders SET note=?, order_user_id=?, order_user_name=?, order_user_role=?, updated_at=? WHERE id=?', [note, actor.user_id, actor.full_name, actor.role, now, order.id]);
       }
       await this.run('DELETE FROM table_order_items WHERE order_id=?', [order.id]);
-      for (const item of items) {
+      for (const item of mergedItems) {
         await this.run(`
           INSERT INTO table_order_items(order_id, product_id, product_name, quantity, sale_unit, item_json, created_at)
           VALUES(?, ?, ?, ?, ?, ?, ?)
@@ -792,7 +809,7 @@ class POSDatabase {
       await this.fallback.put('table_orders', { ...order, note, order_user_id: actor.user_id, order_user_name: actor.full_name, order_user_role: actor.role, updated_at: now });
       await Promise.all((await this.fallback.all('table_order_items')).filter(row => Number(row.order_id) === Number(order.id)).map(row => this.fallback.delete('table_order_items', row.id)));
     }
-    for (const item of items) {
+    for (const item of mergedItems) {
       await this.fallback.put('table_order_items', { order_id: order.id, product_id: item.id, product_name: item.product_name, quantity: Number(item.quantity || 0), sale_unit: item.sale_unit || item.base_unit || 'Piece', item_json: JSON.stringify(item), created_at: now });
     }
     if (tableId) {
@@ -1130,7 +1147,19 @@ class POSDatabase {
     const allSales = await this.getSales();
     const total = sales.reduce((sum, sale) => sum + Number(sale.grand_total || 0), 0);
     const gst = sales.reduce((sum, sale) => sum + Number(sale.gst_total || 0), 0);
-    return { todaySales: total, todayBills: sales.length, totalBills: allSales.length, gstCollected: gst, recentBills: allSales.slice(0, 6) };
+    const weeklySales = [...Array(7)].map((_, index) => {
+      const day = new Date();
+      day.setDate(day.getDate() - (6 - index));
+      const key = dateOnly(day);
+      const daySales = allSales.filter(sale => dateOnly(sale.created_at) === key && (sale.status || 'paid') === 'paid');
+      return {
+        date: key,
+        label: day.toLocaleDateString(undefined, { weekday: 'short' }),
+        total: daySales.reduce((sum, sale) => sum + Number(sale.grand_total || 0), 0),
+        bills: daySales.length
+      };
+    });
+    return { todaySales: total, todayBills: sales.length, totalBills: allSales.length, gstCollected: gst, recentBills: allSales.slice(0, 6), weeklySales };
   }
 
   async nextInvoice() {

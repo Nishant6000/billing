@@ -36,6 +36,148 @@ export const toCSV = (rows) => {
   return [columns.join(','), ...body].join('\n');
 };
 
+const crcTable = (() => {
+  const table = new Uint32Array(256);
+  for (let n = 0; n < 256; n += 1) {
+    let c = n;
+    for (let k = 0; k < 8; k += 1) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    table[n] = c >>> 0;
+  }
+  return table;
+})();
+
+const crc32 = (bytes) => {
+  let crc = 0xffffffff;
+  bytes.forEach(byte => {
+    crc = crcTable[(crc ^ byte) & 0xff] ^ (crc >>> 8);
+  });
+  return (crc ^ 0xffffffff) >>> 0;
+};
+
+const textBytes = (value) => new TextEncoder().encode(value);
+
+const writeUInt16 = (target, offset, value) => {
+  target[offset] = value & 0xff;
+  target[offset + 1] = (value >>> 8) & 0xff;
+};
+
+const writeUInt32 = (target, offset, value) => {
+  target[offset] = value & 0xff;
+  target[offset + 1] = (value >>> 8) & 0xff;
+  target[offset + 2] = (value >>> 16) & 0xff;
+  target[offset + 3] = (value >>> 24) & 0xff;
+};
+
+const concatBytes = (parts) => {
+  const length = parts.reduce((sum, part) => sum + part.length, 0);
+  const output = new Uint8Array(length);
+  let offset = 0;
+  parts.forEach(part => {
+    output.set(part, offset);
+    offset += part.length;
+  });
+  return output;
+};
+
+const zipStore = (files) => {
+  const localParts = [];
+  const centralParts = [];
+  let offset = 0;
+
+  files.forEach(file => {
+    const name = textBytes(file.name);
+    const data = file.data instanceof Uint8Array ? file.data : textBytes(file.data);
+    const crc = crc32(data);
+    const local = new Uint8Array(30 + name.length);
+    writeUInt32(local, 0, 0x04034b50);
+    writeUInt16(local, 4, 20);
+    writeUInt16(local, 6, 0);
+    writeUInt16(local, 8, 0);
+    writeUInt16(local, 10, 0);
+    writeUInt16(local, 12, 0);
+    writeUInt32(local, 14, crc);
+    writeUInt32(local, 18, data.length);
+    writeUInt32(local, 22, data.length);
+    writeUInt16(local, 26, name.length);
+    writeUInt16(local, 28, 0);
+    local.set(name, 30);
+    localParts.push(local, data);
+
+    const central = new Uint8Array(46 + name.length);
+    writeUInt32(central, 0, 0x02014b50);
+    writeUInt16(central, 4, 20);
+    writeUInt16(central, 6, 20);
+    writeUInt16(central, 8, 0);
+    writeUInt16(central, 10, 0);
+    writeUInt16(central, 12, 0);
+    writeUInt16(central, 14, 0);
+    writeUInt32(central, 16, crc);
+    writeUInt32(central, 20, data.length);
+    writeUInt32(central, 24, data.length);
+    writeUInt16(central, 28, name.length);
+    writeUInt16(central, 30, 0);
+    writeUInt16(central, 32, 0);
+    writeUInt16(central, 34, 0);
+    writeUInt16(central, 36, 0);
+    writeUInt32(central, 38, 0);
+    writeUInt32(central, 42, offset);
+    central.set(name, 46);
+    centralParts.push(central);
+    offset += local.length + data.length;
+  });
+
+  const centralDirectory = concatBytes(centralParts);
+  const end = new Uint8Array(22);
+  writeUInt32(end, 0, 0x06054b50);
+  writeUInt16(end, 8, files.length);
+  writeUInt16(end, 10, files.length);
+  writeUInt32(end, 12, centralDirectory.length);
+  writeUInt32(end, 16, offset);
+  return concatBytes([...localParts, centralDirectory, end]);
+};
+
+const xmlEscape = (value = '') => String(value)
+  .replaceAll('&', '&amp;')
+  .replaceAll('<', '&lt;')
+  .replaceAll('>', '&gt;')
+  .replaceAll('"', '&quot;')
+  .replaceAll("'", '&apos;');
+
+const columnName = (index) => {
+  let name = '';
+  let value = index + 1;
+  while (value > 0) {
+    const modulo = (value - 1) % 26;
+    name = String.fromCharCode(65 + modulo) + name;
+    value = Math.floor((value - modulo) / 26);
+  }
+  return name;
+};
+
+export const toXLSX = (rows, sheetName = 'Report') => {
+  const columns = rows.length ? Object.keys(rows[0]) : ['No Data'];
+  const allRows = rows.length ? rows : [{ 'No Data': '' }];
+  const sheetRows = [
+    columns,
+    ...allRows.map(row => columns.map(column => row[column] ?? ''))
+  ].map((row, rowIndex) => `<row r="${rowIndex + 1}">${row.map((value, columnIndex) => {
+    const cell = `${columnName(columnIndex)}${rowIndex + 1}`;
+    const numeric = value !== '' && value !== null && Number.isFinite(Number(value)) && !String(value).startsWith('0');
+    return numeric
+      ? `<c r="${cell}"><v>${Number(value)}</v></c>`
+      : `<c r="${cell}" t="inlineStr"><is><t>${xmlEscape(value)}</t></is></c>`;
+  }).join('')}</row>`).join('');
+  const worksheet = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>${sheetRows}</sheetData></worksheet>`;
+  const workbook = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="${xmlEscape(sheetName).slice(0, 31)}" sheetId="1" r:id="rId1"/></sheets></workbook>`;
+  return zipStore([
+    { name: '[Content_Types].xml', data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>' },
+    { name: '_rels/.rels', data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>' },
+    { name: 'xl/workbook.xml', data: workbook },
+    { name: 'xl/_rels/workbook.xml.rels', data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>' },
+    { name: 'xl/worksheets/sheet1.xml', data: worksheet }
+  ]);
+};
+
 export const debounce = (callback, wait = 180) => {
   let timer;
   return (...args) => {

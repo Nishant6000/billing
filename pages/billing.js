@@ -10,6 +10,21 @@ let billingBarcodeStream = null;
 let billingBarcodeTimer = null;
 let billingBarcodeDetector = null;
 
+const normalizeCartItems = (items = []) => {
+  const map = new Map();
+  items.forEach(item => {
+    const unit = item.sale_unit || item.base_unit || 'Piece';
+    const key = `${Number(item.id || item.product_id || 0)}|${unit}`;
+    const existing = map.get(key);
+    if (existing) {
+      existing.quantity = Number(existing.quantity || 0) + Number(item.quantity || 0);
+      return;
+    }
+    map.set(key, { ...item, sale_unit: unit, quantity: Number(item.quantity || 0) });
+  });
+  return [...map.values()].filter(item => Number(item.quantity || 0) > 0);
+};
+
 const resetManualDiscount = () => {
   const discountInput = $('#discount');
   if (discountInput) discountInput.value = '0';
@@ -57,6 +72,7 @@ const validateCartStock = () => {
 };
 
 const renderCart = () => {
+  cart = normalizeCartItems(cart);
   const discount = Number($('#discount')?.value || 0);
   const totals = calculateCart(cart, discount);
   const lines = calculateCartLines(cart, discount);
@@ -304,7 +320,7 @@ const renderTableBilling = async () => {
       `).join('')}
     </div>
   `;
-  $('#view').addEventListener('click', async (event) => {
+  $('#view').onclick = async (event) => {
     const tableId = event.target.closest('[data-table]')?.dataset.table;
     const orderType = event.target.closest('[data-order-type]')?.dataset.orderType;
     if (tableId) {
@@ -312,7 +328,7 @@ const renderTableBilling = async () => {
       return await openRestaurantOrder({ tableId: Number(tableId), orderType: 'table', label: displayTableName(table?.table_name || t('table')) });
     }
     if (orderType) return await openRestaurantOrder({ tableId: null, orderType, label: orderType === 'parcel' ? 'Parcel' : 'Takeaway' });
-  });
+  };
 };
 
 const openRestaurantOrder = async (context) => {
@@ -320,7 +336,7 @@ const openRestaurantOrder = async (context) => {
   const order = context.orderType === 'table'
     ? await db.getActiveTableOrder(context.tableId)
     : await db.getActiveTableOrder(null, context.orderType);
-  cart = order ? await db.getTableOrderItems(order.id) : [];
+  cart = normalizeCartItems(order ? await db.getTableOrderItems(order.id) : []);
   $('#view').innerHTML = `
     <div class="row g-3">
       <div class="col-xl-8">
@@ -440,6 +456,7 @@ const bindRestaurantOrderEvents = () => {
 const saveRestaurantOrder = async (showToast = true) => {
   if (!activeRestaurantContext) return;
   if (!cart.length) return toast('Add items before saving the order', 'warning');
+  cart = normalizeCartItems(cart);
   if (!validateCartStock()) return;
   await db.saveTableOrder({
     tableId: activeRestaurantContext.tableId,
@@ -459,6 +476,7 @@ const saveRestaurantOrder = async (showToast = true) => {
 const printKot = async () => {
   if (!activeRestaurantContext) return;
   if (!cart.length) return toast('Add items before printing KOT', 'warning');
+  cart = normalizeCartItems(cart);
   if (!validateCartStock()) return;
   const orderId = await db.saveTableOrder({
     tableId: activeRestaurantContext.tableId,
@@ -580,6 +598,7 @@ const addBarcodeToCurrentBill = async (code) => {
 
 const openPayment = async (options = {}) => {
   if (!cart.length) return toast(t('cartEmpty'), 'warning');
+  cart = normalizeCartItems(cart);
   if (!validateCartStock()) return;
   const totals = calculateCart(cart, Number($('#discount').value || 0));
   const customers = await db.getCustomers();
@@ -711,7 +730,13 @@ const openPayment = async (options = {}) => {
     const customerName = $('#customer-name').value.trim();
     const customerPhone = $('#customer-phone').value.trim();
     if (customerName && customerPhone) {
-      await db.saveCustomer({ customer_name: customerName, mobile: customerPhone });
+      const selectedCustomer = customers.find(row => String(row.id) === String($('#sale-customer-select').value));
+      const existingCustomer = customers.find(row => String(row.mobile || '').trim() === customerPhone);
+      if (selectedCustomer?.source === 'sale') {
+        await db.saveCustomer({ customer_name: customerName, mobile: customerPhone });
+      } else if (!selectedCustomer && !existingCustomer) {
+        await db.saveCustomer({ customer_name: customerName, mobile: customerPhone });
+      }
     }
     await db.saveSale({ invoice_no: invoice, items: cart, subtotal: totals.subtotal, discount: totals.discount, gstTotal: totals.gstTotal, grandTotal: totals.grandTotal, paymentType, referenceNo: $('#payment-ref').value, customerName, customerPhone, user: getCurrentUser() });
     if (options.closeRestaurantOrder && activeRestaurantContext) {

@@ -52,16 +52,12 @@ export const renderDashboard = async () => {
 
   if (window.Chart) {
     salesChart?.destroy();
-    const labels = [...Array(7)].map((_, index) => {
-      const day = new Date();
-      day.setDate(day.getDate() - (6 - index));
-      return day.toLocaleDateString(undefined, { weekday: 'short' });
-    });
+    const labels = (stats.weeklySales || []).map(day => day.label);
     salesChart = new Chart($('#sales-chart'), {
       type: 'line',
       data: {
         labels,
-        datasets: [{ label: 'Sales', data: labels.map((_, i) => i === 6 ? stats.todaySales : 0), borderColor: '#2563eb', backgroundColor: 'rgba(37,99,235,.12)', fill: true, tension: .42 }]
+        datasets: [{ label: 'Sales', data: (stats.weeklySales || []).map(day => day.total), borderColor: '#2563eb', backgroundColor: 'rgba(37,99,235,.12)', fill: true, tension: .42 }]
       },
       options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
     });
