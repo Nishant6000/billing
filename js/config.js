@@ -7,6 +7,8 @@ export const APP_CONFIG = {
     { id: 'dashboard', title: 'Dashboard', icon: 'fa-gauge-high' },
     { id: 'billing', title: 'Billing', icon: 'fa-cart-shopping' },
     { id: 'tables', title: 'Tables', icon: 'fa-chair' },
+    { id: 'waiter', title: 'Waiter Orders', icon: 'fa-clipboard-list' },
+    { id: 'kitchen', title: 'Kitchen Display', icon: 'fa-kitchen-set' },
     { id: 'products', title: 'Products', icon: 'fa-boxes-stacked' },
     { id: 'purchase', title: 'Purchase Entry', icon: 'fa-truck-ramp-box' },
     { id: 'purchase-history', title: 'Purchase History', icon: 'fa-clipboard-list' },
@@ -21,13 +23,15 @@ export const APP_CONFIG = {
     { id: 'barcode', title: 'Barcode', icon: 'fa-barcode' },
     { id: 'backup', title: 'Backup', icon: 'fa-database' }
   ],
-  roles: ['Owner', 'Manager', 'Cashier', 'Inventory', 'Accountant'],
+  roles: ['Owner', 'Manager', 'Cashier', 'Inventory', 'Accountant', 'Waiter', 'Kitchen'],
   roleAccess: {
     Owner: ['*'],
-    Manager: ['dashboard', 'billing', 'tables', 'products', 'purchase', 'purchase-history', 'sales', 'customers', 'whatsapp-marketing', 'reports', 'gst-export', 'printer', 'barcode', 'license', 'backup'],
+    Manager: ['dashboard', 'billing', 'tables', 'waiter', 'kitchen', 'products', 'purchase', 'purchase-history', 'sales', 'customers', 'whatsapp-marketing', 'reports', 'gst-export', 'printer', 'barcode', 'license', 'backup'],
     Cashier: ['dashboard', 'billing', 'tables', 'sales', 'customers', 'barcode'],
     Inventory: ['dashboard', 'products', 'purchase', 'purchase-history', 'barcode', 'backup'],
-    Accountant: ['dashboard', 'sales', 'customers', 'purchase-history', 'reports', 'gst-export', 'backup']
+    Accountant: ['dashboard', 'sales', 'customers', 'purchase-history', 'reports', 'gst-export', 'backup'],
+    Waiter: ['waiter'],
+    Kitchen: ['kitchen']
   },
   defaultSettings: {
     shop_name: 'Ginsoft POS Store',
@@ -49,6 +53,9 @@ export const APP_CONFIG = {
     hotel_id: 'GIN-HOTEL-0001',
     web_sync_url: 'https://ginsoft.co/api/pos-sync.php',
     web_sync_interval_minutes: '15',
+    hotel_order_sync_url: 'https://ginsoft.co/api/hotel-orders.php',
+    hotel_login_url: 'https://ginsoft.co/api/hotel-login.php',
+    hotel_users_url: 'https://ginsoft.co/api/hotel-users.php',
     license_code: '',
     license_check_url: 'https://ginsoft.co/api/license-check.php',
     license_unlock_check_url: 'https://ginsoft.co/api/license-unlock-check.php',

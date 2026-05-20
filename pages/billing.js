@@ -3,6 +3,7 @@ import { getCurrentUser } from '../js/auth.js';
 import { $, calculateCart, calculateCartLines, debounce, escapeHtml, formatBasePrice, formatPackingChain, formatQuantity, money, productDiscountAmount, saleUnitsForProduct, stockQuantityUsed } from '../js/utils.js';
 import { closeModal, showModal, toast } from '../js/ui.js';
 import { displayStatus, displayTableArea, displayTableName, localizedProductName, t } from '../js/i18n.js';
+import { pushKotToCloud, updateCloudKotStatus } from '../js/hotel-cloud.js';
 
 let cart = [];
 let activeRestaurantContext = null;
@@ -484,10 +485,28 @@ const printKot = async () => {
     items: cart,
     user: getCurrentUser()
   });
-  const kot = await db.createKot({ orderId, tableId: activeRestaurantContext.tableId, items: cart });
-  const lines = cart.map(item => `<tr><td>${escapeHtml(item.product_name)}</td><td>${formatQuantity(item.quantity, item.sale_unit || item.base_unit || 'Piece')}</td></tr>`).join('');
+  const byStation = cart.reduce((map, item) => {
+    const station = item.fulfillment_station === 'store' ? 'store' : 'kitchen';
+    if (!map.has(station)) map.set(station, []);
+    map.get(station).push(item);
+    return map;
+  }, new Map());
+  const createdKots = [];
+  for (const [station, items] of byStation.entries()) {
+    const kot = await db.createKot({ orderId, tableId: activeRestaurantContext.tableId, items, station });
+    createdKots.push({ ...kot, station, items });
+    try {
+      await pushKotToCloud(kot.kotId);
+    } catch (error) {
+      toast(`${station === 'store' ? 'Store Room' : 'Kitchen'} KOT saved locally. Cloud sync failed: ${error.message}`, 'warning');
+    }
+  }
+  const lines = createdKots.flatMap(kot => [
+    `<tr><th colspan="2">${kot.station === 'store' ? 'Store Room' : 'Kitchen'} - ${escapeHtml(kot.kotNo)}</th></tr>`,
+    ...kot.items.map(item => `<tr><td>${escapeHtml(item.product_name)}</td><td>${formatQuantity(item.quantity, item.sale_unit || item.base_unit || 'Piece')}</td></tr>`)
+  ]).join('');
   showModal(`
-    <div class="modal-header"><h5 class="modal-title">${kot.kotNo}</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-header"><h5 class="modal-title">KOT Created</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
     <div class="modal-body">
       <div class="receipt-preview print-area">
         <h5 class="text-center">KOT</h5>
@@ -740,7 +759,15 @@ const openPayment = async (options = {}) => {
     }
     await db.saveSale({ invoice_no: invoice, items: cart, subtotal: totals.subtotal, discount: totals.discount, gstTotal: totals.gstTotal, grandTotal: totals.grandTotal, paymentType, referenceNo: $('#payment-ref').value, customerName, customerPhone, user: getCurrentUser() });
     if (options.closeRestaurantOrder && activeRestaurantContext) {
+      const openTickets = (await db.getKotTickets()).filter(ticket => activeRestaurantContext.orderType === 'table'
+        ? Number(ticket.table_id) === Number(activeRestaurantContext.tableId)
+        : !ticket.table_id && String(ticket.table_name || '').toLowerCase() === String(activeRestaurantContext.orderType || '').toLowerCase());
       await db.closeTableOrdersForContext(activeRestaurantContext);
+      for (const ticket of openTickets) {
+        try {
+          await updateCloudKotStatus(ticket.kot_no, 'served');
+        } catch (_) {}
+      }
     }
     const soldCart = [...cart];
     cart = [];

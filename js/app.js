@@ -60,6 +60,7 @@ const updateUserLabel = () => {
 const ensureActiveSession = async () => {
   const sessionUser = getCurrentUser();
   if (!sessionUser) return null;
+  if (sessionUser.cloud_user) return sessionUser;
   const users = await db.getUsers();
   const freshUser = users.find(user => Number(user.id) === Number(sessionUser.id) && user.status !== 'inactive');
   if (!freshUser) {
@@ -80,8 +81,9 @@ const renderLogin = async () => {
     <option value="${escapeHtml(user.user_id)}">${escapeHtml(user.full_name)} (${escapeHtml(user.user_id)})</option>
   `).join('');
   setTitle(t('pinLogin'));
+  const settings = await db.getSettings();
   $('#view').innerHTML = `
-    <div class="login-shell">
+    <div class="login-shell login-shell-split">
       <form class="login-card" id="pin-login-form">
         <div class="login-mark"><i class="fa-solid fa-cash-register"></i></div>
         <p class="eyebrow mb-1">Ginsoft POS</p>
@@ -94,6 +96,19 @@ const renderLogin = async () => {
         <label class="form-label">${t('userPin')}</label>
         <input class="form-control form-control-lg text-center pin-input" name="pin" type="password" inputmode="numeric" pattern="[0-9]{4,8}" maxlength="8" autocomplete="current-password" required autofocus>
         <button class="btn btn-primary-gradient w-100 mt-3" type="submit"><i class="fa-solid fa-unlock-keyhole"></i> ${t('login')}</button>
+      </form>
+      <form class="login-card" id="cloud-login-form">
+        <div class="login-mark"><i class="fa-solid fa-cloud"></i></div>
+        <p class="eyebrow mb-1">Hotel Cloud Login</p>
+        <h2>Waiter / Kitchen</h2>
+        <p class="text-muted mb-3">Use this on waiter phone or kitchen screen.</p>
+        <label class="form-label">Hotel ID</label>
+        <input class="form-control form-control-lg mb-3" name="hotel_id" value="${escapeHtml(settings.hotel_id || '')}" placeholder="GIN-HOTEL-0001" required>
+        <label class="form-label">User ID</label>
+        <input class="form-control form-control-lg mb-3" name="user_id" placeholder="waiter1" required>
+        <label class="form-label">Password / PIN</label>
+        <input class="form-control form-control-lg text-center pin-input" name="password" type="password" autocomplete="current-password" required>
+        <button class="btn btn-outline-primary w-100 mt-3" type="submit"><i class="fa-solid fa-right-to-bracket"></i> Cloud Login</button>
       </form>
     </div>
   `;
@@ -112,6 +127,38 @@ const renderLogin = async () => {
       updateUserLabel();
       await initRouter();
       toast(`Welcome ${user.full_name}`);
+    } finally {
+      button.disabled = false;
+    }
+  });
+  $('#cloud-login-form').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const button = event.currentTarget.querySelector('button');
+    button.disabled = true;
+    try {
+      const form = Object.fromEntries(new FormData(event.currentTarget).entries());
+      const loginSettings = await db.getSettings();
+      const response = await fetch(loginSettings.hotel_login_url || 'https://ginsoft.co/api/hotel-login.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form)
+      });
+      const payload = await response.json().catch(() => ({ error: `HTTP ${response.status}` }));
+      if (!response.ok || payload.ok === false) throw new Error(payload.error || 'Cloud login failed');
+
+      await db.saveSetting('hotel_id', payload.user.hotel_id || form.hotel_id);
+      await db.saveSetting('license_status', payload.license?.status || 'valid');
+      await db.saveSetting('license_validity_till', payload.license?.validity_till || '');
+      await db.saveSetting('license_code', payload.license?.license_code || loginSettings.license_code || '');
+      await db.saveSetting('license_hotel_locked', 'true');
+      setCurrentUser(payload.user);
+      await updateShopNameLabel();
+      updateUserLabel();
+      await initRouter();
+      location.hash = payload.user.role === 'Kitchen' ? '#/kitchen' : '#/waiter';
+      toast(`Welcome ${payload.user.full_name}`);
+    } catch (error) {
+      toast(error.message, 'danger');
     } finally {
       button.disabled = false;
     }

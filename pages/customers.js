@@ -1,5 +1,5 @@
 import { db } from '../js/db.js';
-import { $, debounce, downloadFile, escapeHtml, toCSV } from '../js/utils.js';
+import { $, debounce, downloadFile, escapeHtml, money, toCSV } from '../js/utils.js';
 import { closeModal, showModal, toast } from '../js/ui.js';
 import { t } from '../js/i18n.js';
 
@@ -16,7 +16,9 @@ const customerRows = (customers = []) => customers.map(customer => {
       </td>
       <td>${escapeHtml(customer.gstin || '-')}</td>
       <td>${escapeHtml(customer.address || '-')}</td>
+      <td><strong>${money(customer.credit_balance || 0)}</strong><div class="text-muted small">Limit ${money(customer.credit_limit || 0)}</div></td>
       <td class="text-end">
+        <button class="btn btn-sm btn-outline-success" data-history-customer="${escapeHtml(customer.mobile)}" title="Purchase history"><i class="fa-solid fa-clock-rotate-left"></i></button>
         <button class="btn btn-sm btn-outline-primary" data-edit-customer="${customer.id}" title="${saleOnly ? t('saveCustomer') : t('edit')}"><i class="fa-solid ${saleOnly ? 'fa-user-plus' : 'fa-pen'}"></i></button>
         ${saleOnly ? '' : `<button class="btn btn-sm btn-outline-danger" data-delete-customer="${customer.id}" title="${t('delete')}"><i class="fa-solid fa-trash"></i></button>`}
       </td>
@@ -32,7 +34,7 @@ const renderCustomerTable = async () => {
   const visibleCustomers = customers.slice(start, start + customerPageSize);
   $('#customers-body').innerHTML = customers.length
     ? customerRows(visibleCustomers)
-    : `<tr><td colspan="4" class="text-center text-muted py-4">${t('noCustomersFound')}</td></tr>`;
+    : `<tr><td colspan="5" class="text-center text-muted py-4">${t('noCustomersFound')}</td></tr>`;
   $('#customers-page-info').textContent = customers.length
     ? `${start + 1}-${Math.min(start + customerPageSize, customers.length)} / ${customers.length}`
     : '0 / 0';
@@ -47,6 +49,8 @@ const exportCustomersCsv = async () => {
     mobile: customer.mobile || '',
     gstin: customer.gstin || '',
     address: customer.address || '',
+    credit_limit: customer.credit_limit || 0,
+    credit_balance: customer.credit_balance || 0,
     source: customer.source === 'sale' ? 'sales history' : 'customer',
     created_at: customer.created_at || '',
     updated_at: customer.updated_at || ''
@@ -80,6 +84,14 @@ const openCustomerModal = (customer = null) => {
           <div class="col-md-6">
             <label class="form-label">${t('address')} <span class="text-muted small">(${t('optional')})</span></label>
             <textarea class="form-control" name="address" rows="2">${escapeHtml(customer?.address || '')}</textarea>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Credit Limit</label>
+            <input class="form-control" name="credit_limit" type="number" min="0" step="0.01" value="${escapeHtml(customer?.credit_limit || 0)}">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Current Dues</label>
+            <input class="form-control" name="credit_balance" type="number" min="0" step="0.01" value="${escapeHtml(customer?.credit_balance || 0)}">
           </div>
         </div>
       </div>
@@ -130,7 +142,7 @@ export const renderCustomers = async () => {
       </div>
       <div class="table-responsive">
         <table class="table align-middle">
-          <thead><tr><th>${t('customer')}</th><th>${t('gstin')}</th><th>${t('address')}</th><th></th></tr></thead>
+          <thead><tr><th>${t('customer')}</th><th>${t('gstin')}</th><th>${t('address')}</th><th>Credit / Dues</th><th></th></tr></thead>
           <tbody id="customers-body"></tbody>
         </table>
       </div>
@@ -166,6 +178,20 @@ export const renderCustomers = async () => {
   $('#customers-body').addEventListener('click', async (event) => {
     const editId = event.target.closest('[data-edit-customer]')?.dataset.editCustomer;
     const deleteId = event.target.closest('[data-delete-customer]')?.dataset.deleteCustomer;
+    const historyMobile = event.target.closest('[data-history-customer]')?.dataset.historyCustomer;
+    if (historyMobile) {
+      const sales = (await db.getSales({ search: historyMobile })).filter(sale => String(sale.customer_phone || '') === String(historyMobile));
+      showModal(`
+        <div class="modal-header"><h5 class="modal-title">Customer Purchase History</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body">
+          <div class="table-responsive"><table class="table table-sm">
+            <thead><tr><th>Invoice</th><th>Date</th><th>Payment</th><th class="text-end">Amount</th></tr></thead>
+            <tbody>${sales.length ? sales.map(sale => `<tr><td>${escapeHtml(sale.invoice_no)}</td><td>${escapeHtml(String(sale.created_at).slice(0, 10))}</td><td>${escapeHtml(sale.payment_type || '')}</td><td class="text-end">${money(sale.grand_total)}</td></tr>`).join('') : '<tr><td colspan="4" class="text-center text-muted">No purchases found</td></tr>'}</tbody>
+          </table></div>
+        </div>
+      `);
+      return;
+    }
     if (editId) {
       const customer = (await db.getCustomers()).find(row => String(row.id) === String(editId));
       if (customer) openCustomerModal(customer.source === 'sale' ? { ...customer, id: '' } : customer);

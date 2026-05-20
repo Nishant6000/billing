@@ -10,7 +10,9 @@ export const sanitizeUser = (user = {}) => ({
   user_id: user.user_id,
   full_name: user.full_name,
   role: user.role,
-  status: user.status || 'active'
+  status: user.status || 'active',
+  hotel_id: user.hotel_id || '',
+  cloud_user: Boolean(user.cloud_user)
 });
 
 export const getCurrentUser = () => {

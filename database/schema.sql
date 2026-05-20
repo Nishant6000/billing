@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS products (
   box_no TEXT,
   description TEXT,
   billing_display TEXT NOT NULL DEFAULT 'stock',
+  fulfillment_station TEXT NOT NULL DEFAULT 'kitchen',
   image TEXT,
   created_at TEXT NOT NULL,
   FOREIGN KEY (category_id) REFERENCES categories(id)
@@ -79,6 +80,8 @@ CREATE TABLE IF NOT EXISTS customers (
   mobile TEXT NOT NULL,
   gstin TEXT,
   address TEXT,
+  credit_limit REAL NOT NULL DEFAULT 0,
+  credit_balance REAL NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
@@ -133,8 +136,14 @@ CREATE TABLE IF NOT EXISTS kot_tickets (
   order_id INTEGER NOT NULL,
   table_id INTEGER,
   kot_no TEXT NOT NULL,
-  status TEXT NOT NULL DEFAULT 'printed',
-  created_at TEXT NOT NULL
+  status TEXT NOT NULL DEFAULT 'pending',
+  table_name TEXT,
+  station TEXT NOT NULL DEFAULT 'kitchen',
+  order_user_id TEXT,
+  order_user_name TEXT,
+  order_user_role TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT
 );
 
 CREATE TABLE IF NOT EXISTS kot_items (
@@ -143,7 +152,9 @@ CREATE TABLE IF NOT EXISTS kot_items (
   product_id INTEGER,
   product_name TEXT NOT NULL,
   quantity REAL NOT NULL,
-  sale_unit TEXT NOT NULL DEFAULT 'Piece'
+  sale_unit TEXT NOT NULL DEFAULT 'Piece',
+  status TEXT NOT NULL DEFAULT 'pending',
+  updated_at TEXT
 );
 
 CREATE TABLE IF NOT EXISTS purchases (

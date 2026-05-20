@@ -209,6 +209,7 @@ class POSDatabase {
     if (!names.includes('base_quantity')) await this.run('ALTER TABLE products ADD COLUMN base_quantity REAL NOT NULL DEFAULT 1');
     if (!names.includes('base_unit')) await this.run("ALTER TABLE products ADD COLUMN base_unit TEXT NOT NULL DEFAULT 'Piece'");
     if (!names.includes('package_units_json')) await this.run('ALTER TABLE products ADD COLUMN package_units_json TEXT');
+    if (!names.includes('fulfillment_station')) await this.run("ALTER TABLE products ADD COLUMN fulfillment_station TEXT NOT NULL DEFAULT 'kitchen'");
   }
 
   async ensureSaleItemColumns() {
@@ -265,10 +266,16 @@ class POSDatabase {
         mobile TEXT NOT NULL,
         gstin TEXT,
         address TEXT,
+        credit_limit REAL NOT NULL DEFAULT 0,
+        credit_balance REAL NOT NULL DEFAULT 0,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
       )
     `);
+    const customerColumns = await this.query('PRAGMA table_info(customers)');
+    const customerNames = customerColumns.map(column => column.name);
+    if (!customerNames.includes('credit_limit')) await this.run('ALTER TABLE customers ADD COLUMN credit_limit REAL NOT NULL DEFAULT 0');
+    if (!customerNames.includes('credit_balance')) await this.run('ALTER TABLE customers ADD COLUMN credit_balance REAL NOT NULL DEFAULT 0');
   }
 
   async ensureRestaurantTables() {
@@ -324,6 +331,14 @@ class POSDatabase {
         created_at TEXT NOT NULL
       )
     `);
+    const kotColumns = await this.query('PRAGMA table_info(kot_tickets)');
+    const kotNames = kotColumns.map(column => column.name);
+    if (!kotNames.includes('table_name')) await this.run('ALTER TABLE kot_tickets ADD COLUMN table_name TEXT');
+    if (!kotNames.includes('station')) await this.run("ALTER TABLE kot_tickets ADD COLUMN station TEXT NOT NULL DEFAULT 'kitchen'");
+    if (!kotNames.includes('order_user_id')) await this.run('ALTER TABLE kot_tickets ADD COLUMN order_user_id TEXT');
+    if (!kotNames.includes('order_user_name')) await this.run('ALTER TABLE kot_tickets ADD COLUMN order_user_name TEXT');
+    if (!kotNames.includes('order_user_role')) await this.run('ALTER TABLE kot_tickets ADD COLUMN order_user_role TEXT');
+    if (!kotNames.includes('updated_at')) await this.run('ALTER TABLE kot_tickets ADD COLUMN updated_at TEXT');
     await this.run(`
       CREATE TABLE IF NOT EXISTS kot_items (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -331,9 +346,15 @@ class POSDatabase {
         product_id INTEGER,
         product_name TEXT NOT NULL,
         quantity REAL NOT NULL,
-        sale_unit TEXT NOT NULL DEFAULT 'Piece'
+        sale_unit TEXT NOT NULL DEFAULT 'Piece',
+        status TEXT NOT NULL DEFAULT 'pending',
+        updated_at TEXT
       )
     `);
+    const kotItemColumns = await this.query('PRAGMA table_info(kot_items)');
+    const kotItemNames = kotItemColumns.map(column => column.name);
+    if (!kotItemNames.includes('status')) await this.run("ALTER TABLE kot_items ADD COLUMN status TEXT NOT NULL DEFAULT 'pending'");
+    if (!kotItemNames.includes('updated_at')) await this.run('ALTER TABLE kot_items ADD COLUMN updated_at TEXT');
   }
 
   async defineJeepSqlite() {
@@ -463,6 +484,8 @@ class POSDatabase {
       mobile: String(customer.mobile || '').trim(),
       gstin: String(customer.gstin || '').trim(),
       address: String(customer.address || '').trim(),
+      credit_limit: Number(customer.credit_limit || 0),
+      credit_balance: Number(customer.credit_balance || 0),
       updated_at: now
     };
     if (!row.customer_name) throw new Error('Customer name is required');
@@ -476,9 +499,9 @@ class POSDatabase {
     }
     if (this.mode === 'sqlite') {
       if (row.id) {
-        return await this.run('UPDATE customers SET customer_name=?, mobile=?, gstin=?, address=?, updated_at=? WHERE id=?', [row.customer_name, row.mobile, row.gstin, row.address, row.updated_at, row.id]);
+        return await this.run('UPDATE customers SET customer_name=?, mobile=?, gstin=?, address=?, credit_limit=?, credit_balance=?, updated_at=? WHERE id=?', [row.customer_name, row.mobile, row.gstin, row.address, row.credit_limit, row.credit_balance, row.updated_at, row.id]);
       }
-      return await this.run('INSERT INTO customers(customer_name, mobile, gstin, address, created_at, updated_at) VALUES(?, ?, ?, ?, ?, ?)', [row.customer_name, row.mobile, row.gstin, row.address, now, now]);
+      return await this.run('INSERT INTO customers(customer_name, mobile, gstin, address, credit_limit, credit_balance, created_at, updated_at) VALUES(?, ?, ?, ?, ?, ?, ?, ?)', [row.customer_name, row.mobile, row.gstin, row.address, row.credit_limit, row.credit_balance, now, now]);
     }
     return await this.fallback.put('customers', { ...row, created_at: row.created_at || now });
   }
@@ -632,13 +655,13 @@ class POSDatabase {
     if (this.mode === 'sqlite') {
       if (row.id) {
         return await this.run(`
-          UPDATE products SET category_id=?, product_name=?, product_name_hi=?, product_name_ta=?, product_name_te=?, product_name_mr=?, product_name_ml=?, product_name_kn=?, barcode=?, selling_price=?, base_quantity=?, base_unit=?, package_units_json=?, product_discount_type=?, product_discount_value=?, gst_percent=?, stock=?, shelf_no=?, box_no=?, description=?, billing_display=?, image=? WHERE id=?
-        `, [row.category_id, row.product_name, row.product_name_hi || '', row.product_name_ta || '', row.product_name_te || '', row.product_name_mr || '', row.product_name_ml || '', row.product_name_kn || '', row.barcode, row.selling_price, row.base_quantity || 1, row.base_unit || 'Piece', row.package_units_json || '', row.product_discount_type || 'none', row.product_discount_value || 0, row.gst_percent, row.stock, row.shelf_no || '', row.box_no || '', row.description || '', row.billing_display || 'stock', row.image, row.id]);
+          UPDATE products SET category_id=?, product_name=?, product_name_hi=?, product_name_ta=?, product_name_te=?, product_name_mr=?, product_name_ml=?, product_name_kn=?, barcode=?, selling_price=?, base_quantity=?, base_unit=?, package_units_json=?, product_discount_type=?, product_discount_value=?, gst_percent=?, stock=?, shelf_no=?, box_no=?, description=?, billing_display=?, fulfillment_station=?, image=? WHERE id=?
+        `, [row.category_id, row.product_name, row.product_name_hi || '', row.product_name_ta || '', row.product_name_te || '', row.product_name_mr || '', row.product_name_ml || '', row.product_name_kn || '', row.barcode, row.selling_price, row.base_quantity || 1, row.base_unit || 'Piece', row.package_units_json || '', row.product_discount_type || 'none', row.product_discount_value || 0, row.gst_percent, row.stock, row.shelf_no || '', row.box_no || '', row.description || '', row.billing_display || 'stock', row.fulfillment_station || 'kitchen', row.image, row.id]);
       }
       return await this.run(`
-        INSERT INTO products(category_id, product_name, product_name_hi, product_name_ta, product_name_te, product_name_mr, product_name_ml, product_name_kn, barcode, selling_price, base_quantity, base_unit, package_units_json, product_discount_type, product_discount_value, gst_percent, stock, shelf_no, box_no, description, billing_display, image, created_at)
-        VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `, [row.category_id, row.product_name, row.product_name_hi || '', row.product_name_ta || '', row.product_name_te || '', row.product_name_mr || '', row.product_name_ml || '', row.product_name_kn || '', row.barcode, row.selling_price, row.base_quantity || 1, row.base_unit || 'Piece', row.package_units_json || '', row.product_discount_type || 'none', row.product_discount_value || 0, row.gst_percent, row.stock, row.shelf_no || '', row.box_no || '', row.description || '', row.billing_display || 'stock', row.image, row.created_at]);
+        INSERT INTO products(category_id, product_name, product_name_hi, product_name_ta, product_name_te, product_name_mr, product_name_ml, product_name_kn, barcode, selling_price, base_quantity, base_unit, package_units_json, product_discount_type, product_discount_value, gst_percent, stock, shelf_no, box_no, description, billing_display, fulfillment_station, image, created_at)
+        VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [row.category_id, row.product_name, row.product_name_hi || '', row.product_name_ta || '', row.product_name_te || '', row.product_name_mr || '', row.product_name_ml || '', row.product_name_kn || '', row.barcode, row.selling_price, row.base_quantity || 1, row.base_unit || 'Piece', row.package_units_json || '', row.product_discount_type || 'none', row.product_discount_value || 0, row.gst_percent, row.stock, row.shelf_no || '', row.box_no || '', row.description || '', row.billing_display || 'stock', row.fulfillment_station || 'kitchen', row.image, row.created_at]);
     }
     return await this.fallback.put('products', row);
   }
@@ -819,22 +842,101 @@ class POSDatabase {
     return order.id;
   }
 
-  async createKot({ orderId, tableId = null, items = [] }) {
+  async createKot({ orderId, tableId = null, items = [], station = 'kitchen' }) {
     const kotNo = `KOT-${Date.now()}`;
     const created = todayISO();
+    const order = (await this.getOpenTableOrders()).find(row => Number(row.id) === Number(orderId)) || {};
+    const table = tableId ? (await this.getDiningTables()).find(row => Number(row.id) === Number(tableId)) : null;
     if (this.mode === 'sqlite') {
-      const result = await this.run('INSERT INTO kot_tickets(order_id, table_id, kot_no, status, created_at) VALUES(?, ?, ?, ?, ?)', [orderId, tableId, kotNo, 'printed', created]);
+      const result = await this.run(`
+        INSERT INTO kot_tickets(order_id, table_id, kot_no, status, table_name, station, order_user_id, order_user_name, order_user_role, created_at, updated_at)
+        VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [orderId, tableId, kotNo, 'pending', table?.table_name || order.order_type || '', station || 'kitchen', order.order_user_id || '', order.order_user_name || '', order.order_user_role || '', created, created]);
       const kotId = result.changes?.lastId;
       for (const item of items) {
-        await this.run('INSERT INTO kot_items(kot_id, product_id, product_name, quantity, sale_unit) VALUES(?, ?, ?, ?, ?)', [kotId, item.id, item.product_name, Number(item.quantity || 0), item.sale_unit || item.base_unit || 'Piece']);
+        await this.run('INSERT INTO kot_items(kot_id, product_id, product_name, quantity, sale_unit, status, updated_at) VALUES(?, ?, ?, ?, ?, ?, ?)', [kotId, item.id, item.product_name, Number(item.quantity || 0), item.sale_unit || item.base_unit || 'Piece', 'pending', created]);
       }
       return { kotId, kotNo };
     }
-    const kotId = await this.fallback.put('kot_tickets', { order_id: orderId, table_id: tableId, kot_no: kotNo, status: 'printed', created_at: created });
+    const kotId = await this.fallback.put('kot_tickets', { order_id: orderId, table_id: tableId, kot_no: kotNo, status: 'pending', table_name: table?.table_name || order.order_type || '', station: station || 'kitchen', order_user_id: order.order_user_id || '', order_user_name: order.order_user_name || '', order_user_role: order.order_user_role || '', created_at: created, updated_at: created });
     for (const item of items) {
-      await this.fallback.put('kot_items', { kot_id: kotId, product_id: item.id, product_name: item.product_name, quantity: Number(item.quantity || 0), sale_unit: item.sale_unit || item.base_unit || 'Piece' });
+      await this.fallback.put('kot_items', { kot_id: kotId, product_id: item.id, product_name: item.product_name, quantity: Number(item.quantity || 0), sale_unit: item.sale_unit || item.base_unit || 'Piece', status: 'pending', updated_at: created });
     }
     return { kotId, kotNo };
+  }
+
+  async getKotTickets() {
+    const tickets = this.mode === 'sqlite'
+      ? await this.query('SELECT * FROM kot_tickets ORDER BY created_at DESC')
+      : await this.fallback.all('kot_tickets');
+    const sorted = tickets.sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
+    return Promise.all(sorted.map(async ticket => ({ ...ticket, items: await this.getKotItems(ticket.id) })));
+  }
+
+  async getKotItems(kotId) {
+    const rows = this.mode === 'sqlite'
+      ? await this.query('SELECT * FROM kot_items WHERE kot_id=?', [kotId])
+      : await this.fallback.all('kot_items');
+    return rows.filter(row => Number(row.kot_id) === Number(kotId));
+  }
+
+  async updateKotStatus(kotId, status = 'pending') {
+    const now = todayISO();
+    if (this.mode === 'sqlite') {
+      await this.run('UPDATE kot_tickets SET status=?, updated_at=? WHERE id=?', [status, now, kotId]);
+      if (status === 'ready') await this.run("UPDATE kot_items SET status='ready', updated_at=? WHERE kot_id=?", [now, kotId]);
+      return;
+    }
+    const ticket = (await this.fallback.all('kot_tickets')).find(row => Number(row.id) === Number(kotId));
+    if (ticket) await this.fallback.put('kot_tickets', { ...ticket, status, updated_at: now });
+    if (status === 'ready') {
+      const items = (await this.fallback.all('kot_items')).filter(row => Number(row.kot_id) === Number(kotId));
+      for (const item of items) await this.fallback.put('kot_items', { ...item, status: 'ready', updated_at: now });
+    }
+  }
+
+  async updateKotItemStatus(itemId, status = 'pending') {
+    const now = todayISO();
+    if (this.mode === 'sqlite') {
+      await this.run('UPDATE kot_items SET status=?, updated_at=? WHERE id=?', [status, now, itemId]);
+      const rows = await this.query('SELECT kot_id FROM kot_items WHERE id=?', [itemId]);
+      const kotId = rows[0]?.kot_id;
+      if (kotId) {
+        const items = await this.getKotItems(kotId);
+        const ticketStatus = items.every(item => item.status === 'ready') ? 'ready' : (items.some(item => item.status === 'preparing') ? 'preparing' : 'pending');
+        await this.run('UPDATE kot_tickets SET status=?, updated_at=? WHERE id=?', [ticketStatus, now, kotId]);
+      }
+      return;
+    }
+    const items = await this.fallback.all('kot_items');
+    const item = items.find(row => Number(row.id) === Number(itemId));
+    if (!item) return;
+    await this.fallback.put('kot_items', { ...item, status, updated_at: now });
+    const ticketItems = (await this.fallback.all('kot_items')).filter(row => Number(row.kot_id) === Number(item.kot_id));
+    const ticketStatus = ticketItems.every(row => row.status === 'ready') ? 'ready' : (ticketItems.some(row => row.status === 'preparing') ? 'preparing' : 'pending');
+    const ticket = (await this.fallback.all('kot_tickets')).find(row => Number(row.id) === Number(item.kot_id));
+    if (ticket) await this.fallback.put('kot_tickets', { ...ticket, status: ticketStatus, updated_at: now });
+  }
+
+  async markKotTicketsForContext({ tableId = null, orderType = 'table', status = 'served' } = {}) {
+    const now = todayISO();
+    const tickets = await this.getKotTickets();
+    const matching = tickets.filter(ticket => orderType === 'table'
+      ? Number(ticket.table_id) === Number(tableId)
+      : !ticket.table_id && String(ticket.table_name || '').toLowerCase() === String(orderType || '').toLowerCase());
+    if (!matching.length) return [];
+    if (this.mode === 'sqlite') {
+      for (const ticket of matching) {
+        await this.run('UPDATE kot_tickets SET status=?, updated_at=? WHERE id=?', [status, now, ticket.id]);
+        await this.run('UPDATE kot_items SET status=?, updated_at=? WHERE kot_id=?', [status, now, ticket.id]);
+      }
+      return matching;
+    }
+    for (const ticket of matching) {
+      await this.fallback.put('kot_tickets', { ...ticket, status, updated_at: now });
+      for (const item of ticket.items || []) await this.fallback.put('kot_items', { ...item, status, updated_at: now });
+    }
+    return matching;
   }
 
   async closeTableOrder(orderId) {
@@ -862,14 +964,17 @@ class POSDatabase {
 
     if (this.mode === 'sqlite') {
       if (orderType === 'table') {
+        await this.markKotTicketsForContext({ tableId, orderType, status: 'served' });
         await this.run("UPDATE table_orders SET status='closed', updated_at=? WHERE status='open' AND table_id=?", [now, tableId]);
         await this.releaseTableIfNoOpenOrders(tableId);
       } else {
+        await this.markKotTicketsForContext({ tableId, orderType, status: 'served' });
         await this.run("UPDATE table_orders SET status='closed', updated_at=? WHERE status='open' AND order_type=? AND table_id IS NULL", [now, orderType]);
       }
       return;
     }
 
+    await this.markKotTicketsForContext({ tableId, orderType, status: 'served' });
     for (const order of matchingOrders) {
       await this.fallback.put('table_orders', { ...order, status: 'closed', updated_at: now });
     }

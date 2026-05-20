@@ -79,6 +79,7 @@ const productForm = (product = {}, categories = []) => {
         <div class="col-md-3"><label class="form-label">${t('discountValue')}</label><input class="form-control" name="product_discount_value" type="number" min="0" step="0.01" value="${product.product_discount_value || 0}"></div>
         <div class="col-md-3"><label class="form-label">GST %</label><input class="form-control" name="gst_percent" type="number" step="0.01" value="${product.gst_percent || 0}"></div>
         <div class="col-md-3"><label class="form-label">${t('stock')}</label><input class="form-control" name="stock" type="number" value="${product.stock || 0}"></div>
+        <div class="col-md-3"><label class="form-label">Order Station</label><select class="form-select" name="fulfillment_station"><option value="kitchen" ${product.fulfillment_station !== 'store' ? 'selected' : ''}>Kitchen</option><option value="store" ${product.fulfillment_station === 'store' ? 'selected' : ''}>Store Room</option></select></div>
         <div class="col-md-3"><label class="form-label">${t('shelfNo')}</label><input class="form-control" name="shelf_no" value="${escapeHtml(product.shelf_no || '')}" pattern="[A-Za-z0-9-]*" title="Use letters, numbers, or hyphen only"></div>
         <div class="col-md-3"><label class="form-label">${t('boxNo')}</label><input class="form-control" name="box_no" value="${escapeHtml(product.box_no || '')}" pattern="[A-Za-z0-9-]*" title="Use letters, numbers, or hyphen only"></div>
         <div class="col-md-6"><label class="form-label">${t('description')}</label><textarea class="form-control" name="description" rows="2">${escapeHtml(product.description || '')}</textarea></div>
@@ -119,7 +120,7 @@ const renderRows = async (search = '') => {
       <td>${escapeHtml(product.category_name || '-')}</td>
       <td>${formatBasePrice(product)}<div class="text-muted small">${productDiscountLabel(product)}</div>${formatPackingChain(product) ? `<div class="text-muted small">${escapeHtml(formatPackingChain(product))}</div>` : ''}</td>
       <td>${product.gst_percent}%</td>
-      <td>${product.stock}<div class="text-muted small">Shelf ${escapeHtml(product.shelf_no || '-')} | Box ${escapeHtml(product.box_no || '-')}</div><div class="text-muted small">Billing: ${billingDisplayLabel(product.billing_display)}</div></td>
+      <td>${product.stock}<div class="text-muted small">Shelf ${escapeHtml(product.shelf_no || '-')} | Box ${escapeHtml(product.box_no || '-')}</div><div class="text-muted small">Station: ${product.fulfillment_station === 'store' ? 'Store Room' : 'Kitchen'}</div><div class="text-muted small">Billing: ${billingDisplayLabel(product.billing_display)}</div></td>
       <td class="text-end">
         <button class="btn btn-sm btn-outline-primary" data-edit="${product.id}"><i class="fa-solid fa-pen"></i></button>
         <button class="btn btn-sm btn-outline-danger" data-delete="${product.id}"><i class="fa-solid fa-trash"></i></button>
@@ -222,6 +223,7 @@ const openProductModal = async (product = {}) => {
       box_no: form.box_no.trim(),
       description: form.description.trim(),
       billing_display: billingDisplay,
+      fulfillment_station: form.fulfillment_station || 'kitchen',
       image: form.image.trim()
     });
     closeModal();

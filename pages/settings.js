@@ -5,7 +5,10 @@ import { closeModal, showModal, toast } from '../js/ui.js';
 import { languageOptions, setLanguage, t } from '../js/i18n.js';
 import { runWebSync, startWebSyncFromSettings, webSyncStatus } from '../js/sync.js';
 
-const roleLabel = (role = '') => t(`role${role}`) || role;
+const roleLabel = (role = '') => {
+  const label = t(`role${role}`);
+  return label === `role${role}` ? role : label;
+};
 
 const statusLabel = (status = '') => {
   const normalized = String(status || 'active').toLowerCase();
@@ -20,6 +23,42 @@ const roleOptions = (selected = 'Cashier') => APP_CONFIG.roles.map(role =>
 const languageSelectOptions = (selected = 'en') => languageOptions.map(language =>
   `<option value="${language.code}" ${language.code === selected ? 'selected' : ''}>${language.name}</option>`
 ).join('');
+
+const hotelUserRoleOptions = (selected = 'Waiter') => ['Waiter', 'Kitchen', 'Manager'].map(role =>
+  `<option value="${role}" ${role === selected ? 'selected' : ''}>${role}</option>`
+).join('');
+
+const formFromEvent = (event, selector) => {
+  const form = event.currentTarget?.tagName === 'FORM'
+    ? event.currentTarget
+    : event.target?.closest?.('form') || $(selector);
+  if (!form || form.tagName !== 'FORM') throw new Error('Unable to read form data');
+  return form;
+};
+
+const saveCloudHotelUser = async (form = {}) => {
+  const settings = await db.getSettings();
+  const hotelId = String(settings.hotel_id || '').trim();
+  const url = String(settings.hotel_users_url || 'https://ginsoft.co/api/hotel-users.php').trim();
+  if (!hotelId) throw new Error('Hotel ID is missing');
+  if (!url) throw new Error('Hotel Users API URL is missing');
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      action: 'save',
+      hotel_id: hotelId,
+      user_id: form.user_id,
+      full_name: form.full_name,
+      role: form.role,
+      password: form.password || form.pin || '',
+      status: form.status === 'inactive' ? 0 : 1
+    })
+  });
+  const payload = await response.json().catch(() => ({ error: `HTTP ${response.status}` }));
+  if (!response.ok || payload.ok === false) throw new Error(payload.error || 'Unable to sync cloud user');
+  return payload;
+};
 
 const userRows = (users = []) => users.map(user => `
   <tr>
@@ -82,11 +121,20 @@ const showUserModal = (user = null) => {
   `);
   $('#user-form').addEventListener('submit', async (event) => {
     event.preventDefault();
-    const form = Object.fromEntries(new FormData(event.currentTarget).entries());
+    const form = Object.fromEntries(new FormData(formFromEvent(event, '#user-form')).entries());
     try {
       await db.saveUser(form);
+      if (['Waiter', 'Kitchen'].includes(form.role)) {
+        try {
+          await saveCloudHotelUser(form);
+          toast('User saved and synced to cloud');
+        } catch (syncError) {
+          toast(`User saved locally. Cloud sync failed: ${syncError.message}`, 'warning');
+        }
+      } else {
+        toast(t('userSaved'));
+      }
       closeModal();
-      toast(t('userSaved'));
       await renderSettings();
     } catch (error) {
       toast(error.message, 'danger');
@@ -142,6 +190,18 @@ export const renderSettings = async () => {
           <label class="form-label">Sync API URL</label>
           <input class="form-control" name="web_sync_url" type="url" value="${escapeHtml(settings.web_sync_url || 'https://ginsoft.co/api/pos-sync.php')}">
         </div>
+        <div class="col-md-6">
+          <label class="form-label">Hotel Order Sync URL</label>
+          <input class="form-control" name="hotel_order_sync_url" type="url" value="${escapeHtml(settings.hotel_order_sync_url || 'https://ginsoft.co/api/hotel-orders.php')}">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Hotel Login URL</label>
+          <input class="form-control" name="hotel_login_url" type="url" value="${escapeHtml(settings.hotel_login_url || 'https://ginsoft.co/api/hotel-login.php')}">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Hotel Users API URL</label>
+          <input class="form-control" name="hotel_users_url" type="url" value="${escapeHtml(settings.hotel_users_url || 'https://ginsoft.co/api/hotel-users.php')}">
+        </div>
         <div class="col-12 d-flex flex-wrap justify-content-between align-items-center gap-2">
           <div class="text-muted small">
             Last sync: ${escapeHtml(syncStatus.lastSyncAt ? new Date(syncStatus.lastSyncAt).toLocaleString() : 'Never')} | Status: ${escapeHtml(syncStatus.lastStatus)}
@@ -191,10 +251,27 @@ export const renderSettings = async () => {
         <span><strong>${t('roleAccountant')}</strong> ${t('accountantRoleHelp')}</span>
       </div>
     </section>
+    <section class="pos-card mt-4">
+      <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+        <div>
+          <h2 class="section-title mb-1">Cloud Hotel Users</h2>
+          <p class="text-muted mb-0">Create waiter and kitchen logins for other devices.</p>
+        </div>
+        <button class="btn btn-outline-primary" id="refresh-cloud-users" type="button"><i class="fa-solid fa-rotate"></i> Refresh</button>
+      </div>
+      <form class="row g-3 align-items-end mb-3" id="cloud-user-form">
+        <div class="col-md-3"><label class="form-label">User ID</label><input class="form-control" name="user_id" placeholder="waiter1" required></div>
+        <div class="col-md-3"><label class="form-label">Full Name</label><input class="form-control" name="full_name" required></div>
+        <div class="col-md-2"><label class="form-label">Role</label><select class="form-select" name="role">${hotelUserRoleOptions()}</select></div>
+        <div class="col-md-2"><label class="form-label">Password/PIN</label><input class="form-control" name="password" type="password" required></div>
+        <div class="col-md-2"><button class="btn btn-primary-gradient w-100" type="submit"><i class="fa-solid fa-cloud-arrow-up"></i> Save</button></div>
+      </form>
+      <div class="table-responsive"><table class="table align-middle"><thead><tr><th>User</th><th>Role</th><th>Status</th><th>Updated</th></tr></thead><tbody id="cloud-users-body"><tr><td colspan="4" class="text-muted text-center py-3">Click refresh to load users</td></tr></tbody></table></div>
+    </section>
   `;
   $('#settings-form').addEventListener('submit', async (event) => {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
+    const form = new FormData(formFromEvent(event, '#settings-form'));
     for (const [key, value] of form.entries()) {
       if (value instanceof File) continue;
       await db.saveSetting(key, value);
@@ -217,6 +294,39 @@ export const renderSettings = async () => {
   });
 
   $('#add-user').addEventListener('click', () => showUserModal());
+  const loadCloudUsers = async () => {
+    const currentSettings = await db.getSettings();
+    const response = await fetch(currentSettings.hotel_users_url || 'https://ginsoft.co/api/hotel-users.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'list', hotel_id: currentSettings.hotel_id })
+    });
+    const payload = await response.json().catch(() => ({ error: `HTTP ${response.status}` }));
+    if (!response.ok || payload.ok === false) throw new Error(payload.error || 'Unable to load cloud users');
+    $('#cloud-users-body').innerHTML = (payload.users || []).length ? payload.users.map(user => `
+      <tr><td><strong>${escapeHtml(user.full_name)}</strong><div class="text-muted small">${escapeHtml(user.user_id)}</div></td><td>${escapeHtml(user.role)}</td><td>${Number(user.status) === 1 ? 'Active' : 'Inactive'}</td><td>${escapeHtml(user.updated_at || user.created_at || '')}</td></tr>
+    `).join('') : '<tr><td colspan="4" class="text-muted text-center py-3">No cloud users</td></tr>';
+  };
+  $('#refresh-cloud-users').addEventListener('click', async () => {
+    try { await loadCloudUsers(); } catch (error) { toast(error.message, 'danger'); }
+  });
+  $('#cloud-user-form').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const formElement = formFromEvent(event, '#cloud-user-form');
+    const button = formElement.querySelector('button');
+    button.disabled = true;
+    try {
+      const form = Object.fromEntries(new FormData(formElement).entries());
+      await saveCloudHotelUser({ ...form, status: 'active' });
+      formElement.reset();
+      toast('Cloud user saved');
+      await loadCloudUsers();
+    } catch (error) {
+      toast(error.message, 'danger');
+    } finally {
+      button.disabled = false;
+    }
+  });
   $('#users-role-section').addEventListener('click', async (event) => {
     const editId = event.target.closest('[data-edit-user]')?.dataset.editUser;
     const deleteId = event.target.closest('[data-delete-user]')?.dataset.deleteUser;

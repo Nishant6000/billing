@@ -6,6 +6,8 @@ import { routeTitle, t } from './i18n.js';
 import { renderDashboard } from '../pages/dashboard.js';
 import { renderBilling } from '../pages/billing.js';
 import { renderTables } from '../pages/tables.js';
+import { renderWaiterOrders } from '../pages/waiter.js';
+import { renderKitchenDisplay } from '../pages/kitchen.js';
 import { renderProducts } from '../pages/products.js';
 import { renderPurchaseEntry, renderPurchaseHistory } from '../pages/purchase.js';
 import { renderSales } from '../pages/sales.js';
@@ -24,6 +26,8 @@ const routes = {
   dashboard: renderDashboard,
   billing: renderBilling,
   tables: renderTables,
+  waiter: renderWaiterOrders,
+  kitchen: renderKitchenDisplay,
   products: renderProducts,
   purchase: renderPurchaseEntry,
   'purchase-history': renderPurchaseHistory,
@@ -41,8 +45,9 @@ const routes = {
 
 export const renderNav = () => {
   const billingMode = localStorage.getItem('pos-billing-mode') || 'direct';
+  const tableOnlyRoutes = ['tables', 'waiter', 'kitchen'];
   const routes = visibleRoutesForUser(getCurrentUser())
-    .filter(route => billingMode === 'table' || route.id !== 'tables');
+    .filter(route => billingMode === 'table' || !tableOnlyRoutes.includes(route.id));
   $('#nav-menu').innerHTML = routes.map(route => `
     <a class="nav-link-pos" href="#/${route.id}" data-route="${route.id}" title="${routeTitle(route)}">
       <i class="fa-solid ${route.icon}"></i><span>${routeTitle(route)}</span>
@@ -52,12 +57,19 @@ export const renderNav = () => {
 
 export const navigate = async (routeId = 'dashboard') => {
   const user = getCurrentUser();
+  const billingMode = localStorage.getItem('pos-billing-mode') || 'direct';
+  const tableOnlyRoutes = ['tables', 'waiter', 'kitchen'];
   if (!user) {
     renderNav();
     setTitle(t('pinLogin'));
     return;
   }
   const route = APP_CONFIG.routes.find(item => item.id === routeId) || APP_CONFIG.routes[0];
+  if (billingMode !== 'table' && tableOnlyRoutes.includes(route.id)) {
+    toast('Enable Table Billing in Settings to use this page', 'warning');
+    location.hash = '#/dashboard';
+    return;
+  }
   if (!canAccessRoute(user, route.id)) {
     toast('This role does not have access to that page', 'warning');
     const firstAllowed = visibleRoutesForUser(user)[0] || APP_CONFIG.routes[0];
