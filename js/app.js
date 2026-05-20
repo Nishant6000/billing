@@ -1,9 +1,11 @@
 import { db } from './db.js';
 import { $, escapeHtml } from './utils.js';
-import { clearCurrentUser, getCurrentUser, setCurrentUser } from './auth.js';
+import { clearCurrentUser, getCurrentUser, setCurrentUser, setLicenseStatus } from './auth.js';
 import { initRouter, navigate, renderNav } from './router.js';
 import { setTitle, toast } from './ui.js';
 import { setLanguage, t } from './i18n.js';
+import { startWebSyncFromSettings } from './sync.js';
+import { validateLocalLicenseState } from '../pages/license.js';
 
 const hideSplash = () => {
   const splash = $('#splash-screen');
@@ -25,6 +27,7 @@ const updateShopNameLabel = async () => {
   const settings = await db.getSettings();
   $('#shop-name-label').textContent = settings.shop_name || 'Ginsoft POS Store';
   localStorage.setItem('pos-billing-mode', settings.billing_mode || 'direct');
+  setLicenseStatus(settings.license_status || 'unlicensed');
   setLanguage(settings.language || localStorage.getItem('pos-language') || 'en');
   updateStaticLabels();
 };
@@ -170,6 +173,9 @@ try {
   const mode = await db.init();
   updateDbStatus(mode);
   await updateShopNameLabel();
+  await validateLocalLicenseState();
+  await updateShopNameLabel();
+  await startWebSyncFromSettings();
   const user = await ensureActiveSession();
   updateUserLabel();
   if (user) await initRouter();

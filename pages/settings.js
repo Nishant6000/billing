@@ -3,6 +3,7 @@ import { APP_CONFIG } from '../js/config.js';
 import { $, escapeHtml } from '../js/utils.js';
 import { closeModal, showModal, toast } from '../js/ui.js';
 import { languageOptions, setLanguage, t } from '../js/i18n.js';
+import { runWebSync, startWebSyncFromSettings, webSyncStatus } from '../js/sync.js';
 
 const roleLabel = (role = '') => t(`role${role}`) || role;
 
@@ -96,6 +97,7 @@ const showUserModal = (user = null) => {
 export const renderSettings = async () => {
   const settings = await db.getSettings();
   const users = await db.getUsers();
+  const syncStatus = webSyncStatus();
   $('#view').innerHTML = `
     <form class="pos-card" id="settings-form">
       <h2 class="section-title">${t('shopDetails')}</h2>
@@ -118,6 +120,51 @@ export const renderSettings = async () => {
       <hr>
       <h2 class="section-title">${t('billSettings')}</h2>
       <div class="form-check form-switch"><input class="form-check-input" type="checkbox" checked id="printAfterSale"><label class="form-check-label" for="printAfterSale">${t('showReceiptAfterPayment')}</label></div>
+      <hr>
+      <h2 class="section-title">Web Sync</h2>
+      <div class="row g-3">
+        <div class="col-md-3">
+          <label class="form-label">Web Sync</label>
+          <select class="form-select" name="web_sync_enabled">
+            <option value="false">${t('disabled')}</option>
+            <option value="true" ${settings.web_sync_enabled === 'true' ? 'selected' : ''}>${t('enabled')}</option>
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Hotel ID</label>
+          <input class="form-control" name="hotel_id" value="${escapeHtml(settings.hotel_id || 'GIN-HOTEL-0001')}" placeholder="GIN-HOTEL-0001">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Sync Interval (minutes)</label>
+          <input class="form-control" name="web_sync_interval_minutes" type="number" min="1" step="1" value="${escapeHtml(settings.web_sync_interval_minutes || '15')}">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Sync API URL</label>
+          <input class="form-control" name="web_sync_url" type="url" value="${escapeHtml(settings.web_sync_url || 'https://ginsoft.co/api/pos-sync.php')}">
+        </div>
+        <div class="col-12 d-flex flex-wrap justify-content-between align-items-center gap-2">
+          <div class="text-muted small">
+            Last sync: ${escapeHtml(syncStatus.lastSyncAt ? new Date(syncStatus.lastSyncAt).toLocaleString() : 'Never')} | Status: ${escapeHtml(syncStatus.lastStatus)}
+          </div>
+          <button class="btn btn-outline-primary" id="web-sync-now" type="button"><i class="fa-solid fa-cloud-arrow-up"></i> Sync Now</button>
+        </div>
+      </div>
+      <hr>
+      <h2 class="section-title">License Settings</h2>
+      <div class="row g-3">
+        <div class="col-md-4">
+          <label class="form-label">Show License API URL</label>
+          <select class="form-select" name="license_api_url_visible">
+            <option value="false">${t('disabled')}</option>
+            <option value="true" ${settings.license_api_url_visible === 'true' ? 'selected' : ''}>${t('enabled')}</option>
+          </select>
+        </div>
+        <div class="col-md-8">
+          <label class="form-label">Default License API URL</label>
+          <input class="form-control" name="license_check_url" type="url" value="${escapeHtml(settings.license_check_url || 'https://ginsoft.co/api/license-check.php')}">
+          <div class="form-text">Keep this hidden in License tab for normal users. Enable only for service or setup work.</div>
+        </div>
+      </div>
       <button class="btn btn-primary-gradient mt-4"><i class="fa-solid fa-floppy-disk"></i> ${t('saveSettings')}</button>
     </form>
     <section class="pos-card mt-4" id="users-role-section">
@@ -156,7 +203,16 @@ export const renderSettings = async () => {
     }
     await window.POS?.updateShopNameLabel?.();
     window.POS?.renderNav?.();
+    await startWebSyncFromSettings();
     toast(t('settingsSaved'));
+    await renderSettings();
+  });
+
+  $('#web-sync-now').addEventListener('click', async () => {
+    const button = $('#web-sync-now');
+    button.disabled = true;
+    await runWebSync();
+    button.disabled = false;
     await renderSettings();
   });
 

@@ -14,6 +14,7 @@ import { renderWhatsappMarketing } from '../pages/whatsapp-marketing.js';
 import { renderReports } from '../pages/reports.js';
 import { renderGstExport } from '../pages/gst-export.js';
 import { renderSettings } from '../pages/settings.js';
+import { renderLicense } from '../pages/license.js';
 import { renderPrinter } from '../pages/printer.js';
 import { renderBackup } from '../pages/backup.js';
 import { renderBarcode } from '../pages/barcode.js';
@@ -32,6 +33,7 @@ const routes = {
   reports: renderReports,
   'gst-export': renderGstExport,
   settings: renderSettings,
+  license: renderLicense,
   printer: renderPrinter,
   barcode: renderBarcode,
   backup: renderBackup

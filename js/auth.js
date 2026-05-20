@@ -1,6 +1,9 @@
 import { APP_CONFIG } from './config.js';
 
 const SESSION_KEY = 'ginsoft-pos-session-user';
+const LICENSE_STATUS_KEY = 'pos-license-status';
+const LICENSE_LOCKED_STATUSES = ['unlicensed', 'expired', 'inactive', 'invalid'];
+const LICENSE_SAFE_ROUTES = ['license', 'backup'];
 
 export const sanitizeUser = (user = {}) => ({
   id: user.id,
@@ -24,8 +27,20 @@ export const setCurrentUser = (user) => {
 
 export const clearCurrentUser = () => sessionStorage.removeItem(SESSION_KEY);
 
+export const setLicenseStatus = (status = 'valid') => {
+  localStorage.setItem(LICENSE_STATUS_KEY, String(status || 'valid').toLowerCase());
+};
+
+export const getLicenseStatus = () =>
+  String(localStorage.getItem(LICENSE_STATUS_KEY) || 'valid').toLowerCase();
+
+export const isLicenseAccessLocked = () =>
+  LICENSE_LOCKED_STATUSES.includes(getLicenseStatus());
+
 export const canAccessRoute = (user, routeId) => {
   if (!user?.role) return false;
+  if (getLicenseStatus() === 'unlicensed') return routeId === 'license';
+  if (isLicenseAccessLocked()) return LICENSE_SAFE_ROUTES.includes(routeId);
   const access = APP_CONFIG.roleAccess[user.role] || [];
   return access.includes('*') || access.includes(routeId);
 };

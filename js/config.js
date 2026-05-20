@@ -16,6 +16,7 @@ export const APP_CONFIG = {
     { id: 'reports', title: 'Reports', icon: 'fa-chart-line' },
     { id: 'gst-export', title: 'GST Export', icon: 'fa-file-export' },
     { id: 'settings', title: 'Settings', icon: 'fa-gear' },
+    { id: 'license', title: 'License', icon: 'fa-id-card' },
     { id: 'printer', title: 'Printer', icon: 'fa-print' },
     { id: 'barcode', title: 'Barcode', icon: 'fa-barcode' },
     { id: 'backup', title: 'Backup', icon: 'fa-database' }
@@ -23,7 +24,7 @@ export const APP_CONFIG = {
   roles: ['Owner', 'Manager', 'Cashier', 'Inventory', 'Accountant'],
   roleAccess: {
     Owner: ['*'],
-    Manager: ['dashboard', 'billing', 'tables', 'products', 'purchase', 'purchase-history', 'sales', 'customers', 'whatsapp-marketing', 'reports', 'gst-export', 'printer', 'barcode', 'backup'],
+    Manager: ['dashboard', 'billing', 'tables', 'products', 'purchase', 'purchase-history', 'sales', 'customers', 'whatsapp-marketing', 'reports', 'gst-export', 'printer', 'barcode', 'license', 'backup'],
     Cashier: ['dashboard', 'billing', 'tables', 'sales', 'customers', 'barcode'],
     Inventory: ['dashboard', 'products', 'purchase', 'purchase-history', 'barcode', 'backup'],
     Accountant: ['dashboard', 'sales', 'customers', 'purchase-history', 'reports', 'gst-export', 'backup']
@@ -43,6 +44,21 @@ export const APP_CONFIG = {
     bill_prefix: 'INV',
     billing_mode: 'direct',
     weight_enabled: 'false',
-    language: 'en'
+    language: 'en',
+    web_sync_enabled: 'false',
+    hotel_id: 'GIN-HOTEL-0001',
+    web_sync_url: 'https://ginsoft.co/api/pos-sync.php',
+    web_sync_interval_minutes: '15',
+    license_code: '',
+    license_check_url: 'https://ginsoft.co/api/license-check.php',
+    license_unlock_check_url: 'https://ginsoft.co/api/license-unlock-check.php',
+    license_api_url_visible: 'false',
+    license_status: 'unlicensed',
+    license_customer_id: '',
+    license_validity_till: '',
+    license_last_checked_at: '',
+    license_reason: '',
+    license_hotel_locked: 'false',
+    licence_approval: '1'
   }
 };
