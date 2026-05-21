@@ -54,6 +54,9 @@ export const validateLocalLicenseState = async () => {
   if (!settings.license_code || currentStatus === 'unlicensed') {
     status = 'unlicensed';
     reason = 'License activation required';
+  } else if (currentStatus === 'valid' && !validTill) {
+    status = 'invalid';
+    reason = 'License validity date missing';
   } else if (currentStatus === 'valid' && isExpiredDate(validTill)) {
     status = 'expired';
     reason = `License expired on ${validTill}`;

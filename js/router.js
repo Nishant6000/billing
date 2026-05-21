@@ -16,7 +16,7 @@ import { renderWhatsappMarketing } from '../pages/whatsapp-marketing.js';
 import { renderReports } from '../pages/reports.js';
 import { renderGstExport } from '../pages/gst-export.js';
 import { renderSettings } from '../pages/settings.js';
-import { renderLicense } from '../pages/license.js';
+import { renderLicense, validateLocalLicenseState } from '../pages/license.js';
 import { renderPrinter } from '../pages/printer.js';
 import { renderBackup } from '../pages/backup.js';
 import { renderBarcode } from '../pages/barcode.js';
@@ -64,6 +64,7 @@ export const navigate = async (routeId = 'dashboard') => {
     setTitle(t('pinLogin'));
     return;
   }
+  await validateLocalLicenseState();
   const route = APP_CONFIG.routes.find(item => item.id === routeId) || APP_CONFIG.routes[0];
   if (billingMode !== 'table' && tableOnlyRoutes.includes(route.id)) {
     toast('Enable Table Billing in Settings to use this page', 'warning');
